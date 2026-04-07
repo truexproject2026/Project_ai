@@ -12,22 +12,30 @@ interface Result {
   id: string;
 }
 
+interface ReviewSample {
+  comment: string;
+}
+
 export default function Home() {
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<ReviewSample[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
   const [customComment, setCustomComment] = useState("");
   const [selectedComments, setSelectedComments] = useState<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState(false);
   const [pendingComment, setPendingComment] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     fetch("/api/reviews")
       .then((r) => r.json())
-      .then(setReviews);
+      .then((data: ReviewSample[]) => setReviews(data));
   }, []);
 
   const hasPendingApprovals = results.some(r => r.status === "pending");
+  const totalPages = Math.max(1, Math.ceil(reviews.length / pageSize));
+  const paginatedReviews = reviews.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   async function analyze(text: string) {
     if (!text.trim()) return;
@@ -136,19 +144,20 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 p-8">
+    <main className="min-h-screen p-8 bg-[radial-gradient(circle_at_15%_20%,#dbeafe_0%,transparent_38%),radial-gradient(circle_at_85%_10%,#e0f2fe_0%,transparent_34%),radial-gradient(circle_at_50%_100%,#bfdbfe_0%,transparent_36%),linear-gradient(135deg,#ffffff_0%,#eff6ff_48%,#dbeafe_100%)]">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-amber-900 mb-2">
+          <h1 className="text-4xl font-bold text-slate-800 mb-2">
             AI Customer Sentiment & Auto Reply
           </h1>
+          <p className="text-slate-600">Smart moderation dashboard with human approval workflow</p>
         </div>
 
         {/* Warning Dialog */}
         {showWarning && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+            <div className="glass-card rounded-2xl p-6 max-w-md mx-4">
               <h3 className="text-lg font-bold mb-4">⚠️ มีการร่างคำตอบที่ยังไม่ได้อนุมัติ</h3>
               <p className="text-gray-600 mb-6">
                 คุณมีคำตอบที่ร่างไว้ {results.filter(r => r.status === "pending").length} รายการที่ยังไม่ได้อนุมัติ
@@ -157,13 +166,13 @@ export default function Home() {
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={cancelSelection}
-                  className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                  className="px-4 py-2 border border-white/40 rounded-lg hover:bg-white/40"
                 >
                   ยกเลิก
                 </button>
                 <button
                   onClick={confirmSelection}
-                  className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   เลือกคอมเมนต์ใหม่
                 </button>
@@ -175,39 +184,39 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left: Review List */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="glass-card rounded-2xl shadow-xl p-4">
               <h2 className="text-xl font-bold mb-4">📋 Customer Reviews</h2>
 
               {/* Status Indicator */}
               {hasPendingApprovals && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800">
+                <div className="mb-4 p-3 bg-blue-50/80 border border-blue-200/70 rounded-xl">
+                  <p className="text-sm text-blue-800">
                     ⚠️ มี {results.filter(r => r.status === "pending").length} คำตอบที่รอการอนุมัติ
                   </p>
                 </div>
               )}
 
               {/* Custom Input */}
-              <div className="mb-4 p-3 bg-amber-50 rounded-lg">
+              <div className="mb-4 p-3 bg-white/40 border border-white/50 rounded-xl">
                 <textarea
                   placeholder="พิมพ์คอมเมนต์ที่ต้องการวิเคราะห์..."
                   value={customComment}
                   onChange={(e) => setCustomComment(e.target.value)}
-                  className="w-full p-2 border rounded text-sm mb-2"
-                  rows={3}
+                  className="w-full p-3 border border-white/40 bg-white/70 rounded-lg text-sm mb-2 outline-none focus:ring-2 focus:ring-blue-300"
+                  rows={4}
                 />
                 <button
                   onClick={() => handleCommentSelect(customComment)}
                   disabled={loading || !customComment.trim()}
-                  className="w-full px-3 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
+                  className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
                 >
                   {loading ? "กำลังวิเคราะห์..." : "วิเคราะห์"}
                 </button>
               </div>
 
               {/* Review Samples */}
-              <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                {reviews.map((r, i) => {
+              <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+                {paginatedReviews.map((r, i) => {
                   const isAnalyzed = results.some(result => result.comment === r.comment);
                   const isSelected = results.some(result =>
                     result.comment === r.comment && selectedComments.has(result.id)
@@ -215,27 +224,27 @@ export default function Home() {
 
                   return (
                     <button
-                      key={i}
+                      key={`${currentPage}-${i}`}
                       onClick={() => handleCommentSelect(r.comment)}
                       disabled={loading}
                       className={`w-full text-left p-3 border rounded transition text-sm ${
                         isAnalyzed
                           ? isSelected
-                            ? "bg-blue-50 border-blue-300"
-                            : "bg-green-50 border-green-300"
-                          : "hover:bg-amber-50"
+                            ? "bg-blue-100/80 border-blue-300"
+                            : "bg-white/60 border-white/50"
+                          : "bg-white/60 border-white/50 hover:bg-white/80"
                       } disabled:opacity-50`}
                     >
                       <div className="flex items-start gap-2">
-                        <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${
+                        <div className={`w-2 h-2 rounded-full mt-1 shrink-0 ${
                           isAnalyzed
                             ? isSelected
                               ? "bg-blue-500"
-                              : "bg-green-500"
+                              : "bg-blue-400"
                             : "bg-gray-300"
                         }`} />
                         <div className="flex-1">
-                          <p className="line-clamp-3 text-gray-700">{r.comment}</p>
+                          <p className="line-clamp-3 text-slate-700">{r.comment}</p>
                           {isAnalyzed && (
                             <p className="text-xs text-gray-500 mt-1">
                               {isSelected ? "กำลังดำเนินการ" : "วิเคราะห์แล้ว"}
@@ -247,20 +256,39 @@ export default function Home() {
                   );
                 })}
               </div>
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg border border-white/50 bg-white/60 hover:bg-white/80 disabled:opacity-40"
+                >
+                  ← ก่อนหน้า
+                </button>
+                <span className="text-slate-600">
+                  หน้า {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-white/50 bg-white/60 hover:bg-white/80 disabled:opacity-40"
+                >
+                  ถัดไป →
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Right: Results & Approval */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="glass-card rounded-2xl shadow-xl p-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">✅ รอการอนุมัติ</h2>
                 <div className="flex gap-2 text-sm">
-                  <span className="text-blue-600">
+                  <span className="text-blue-700">
                     {selectedComments.size} เลือก
                   </span>
                   <span className="text-gray-400">•</span>
-                  <span className="text-amber-600">
+                  <span className="text-blue-500">
                     {results.filter((r) => r.status === "pending").length} รอ
                   </span>
                 </div>
@@ -280,7 +308,7 @@ export default function Home() {
                         key={result.id}
                         className={`border rounded-lg transition-all ${
                           isSelected
-                            ? "border-blue-300 bg-blue-50 shadow-md"
+                            ? "border-blue-300 bg-blue-50/80 shadow-md"
                             : result.status === "approved"
                             ? "border-green-300 bg-green-50"
                             : result.status === "rejected"
@@ -335,7 +363,7 @@ export default function Home() {
                             <div className="space-y-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-700 mb-1">คอมเมนต์:</p>
-                                <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                              <p className="text-sm text-gray-600 bg-white/60 p-2 rounded">
                                   {result.comment}
                                 </p>
                               </div>
@@ -362,7 +390,7 @@ export default function Home() {
                               {result.status !== "rejected" && (
                                 <div>
                                   <p className="text-sm font-medium text-gray-700 mb-1">คำตอบ:</p>
-                                  <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                                  <p className="text-sm text-gray-600 bg-white/60 p-2 rounded">
                                     {result.reply}
                                   </p>
                                 </div>

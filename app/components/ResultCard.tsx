@@ -38,10 +38,10 @@ export default function ResultCard({
   };
 
   return (
-    <div className="border rounded-lg p-4 bg-white shadow-md">
+    <div className="border border-white/50 rounded-xl p-4 bg-white/65 backdrop-blur-md shadow-lg">
       <div className="mb-4">
         <p className="text-sm text-gray-500">{new Date(timestamp).toLocaleString()}</p>
-        <p className="mt-2 p-3 bg-gray-50 rounded">
+        <p className="mt-2 p-3 bg-white/70 rounded-lg">
           <b>Comment:</b> {comment}
         </p>
       </div>
@@ -62,7 +62,7 @@ export default function ResultCard({
         <textarea
           value={editedReply}
           onChange={(e) => setEditedReply(e.target.value)}
-          className="w-full p-3 border rounded-md font-thai text-sm"
+          className="w-full p-3 border border-white/50 bg-white/70 rounded-md font-thai text-sm"
           rows={3}
         />
       </div>
@@ -70,7 +70,7 @@ export default function ResultCard({
       <div className="flex gap-3 justify-end">
         <button
           onClick={onReject}
-          className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+          className="px-4 py-2 border border-white/50 rounded hover:bg-white/70"
         >
           💬 Edit
         </button>
