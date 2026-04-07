@@ -40,8 +40,8 @@ export default function ResultCard({
   return (
     <div className="border border-white/50 rounded-xl p-4 bg-white/65 backdrop-blur-md shadow-lg">
       <div className="mb-4">
-        <p className="text-sm text-gray-500">{new Date(timestamp).toLocaleString()}</p>
-        <p className="mt-2 p-3 bg-white/70 rounded-lg">
+        <p className="text-sm text-slate-600">{new Date(timestamp).toLocaleString()}</p>
+        <p className="mt-2 p-3 bg-white border border-slate-200 rounded-lg text-slate-900">
           <b>Comment:</b> {comment}
         </p>
       </div>
@@ -52,17 +52,17 @@ export default function ResultCard({
         }`}>
           {sentiment}
         </span>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-slate-700 font-medium">
           Confidence: {(confidence * 100).toFixed(0)}%
         </span>
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-2">📝 Draft Reply:</label>
+        <label className="block text-sm font-semibold text-slate-900 mb-2">📝 Draft Reply:</label>
         <textarea
           value={editedReply}
           onChange={(e) => setEditedReply(e.target.value)}
-          className="w-full p-3 border border-white/50 bg-white/70 rounded-md font-thai text-sm"
+          className="w-full p-3 border border-slate-300 bg-white rounded-md font-thai text-sm text-slate-900 placeholder:text-slate-500"
           rows={3}
         />
       </div>

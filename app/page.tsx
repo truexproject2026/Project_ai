@@ -26,16 +26,29 @@ export default function Home() {
   const [pendingComment, setPendingComment] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const [reviewSource, setReviewSource] = useState("huggingface");
 
   useEffect(() => {
-    fetch("/api/reviews")
+    fetch(`/api/reviews?page=${currentPage}&pageSize=${pageSize}`)
       .then((r) => r.json())
-      .then((data: ReviewSample[]) => setReviews(data));
-  }, []);
+      .then(
+        (data: {
+          reviews: ReviewSample[];
+          totalPages: number;
+          total: number;
+          source: string;
+        }) => {
+          setReviews(data.reviews ?? []);
+          setTotalPages(data.totalPages ?? 1);
+          setTotalReviews(data.total ?? 0);
+          setReviewSource(data.source ?? "huggingface");
+        }
+      );
+  }, [currentPage]);
 
   const hasPendingApprovals = results.some(r => r.status === "pending");
-  const totalPages = Math.max(1, Math.ceil(reviews.length / pageSize));
-  const paginatedReviews = reviews.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   async function analyze(text: string) {
     if (!text.trim()) return;
@@ -185,7 +198,7 @@ export default function Home() {
           {/* Left: Review List */}
           <div className="lg:col-span-1">
             <div className="glass-card rounded-2xl shadow-xl p-4">
-              <h2 className="text-xl font-bold mb-4">📋 Customer Reviews</h2>
+              <h2 className="text-xl font-bold text-slate-900 mb-4">📋 Customer Reviews</h2>
 
               {/* Status Indicator */}
               {hasPendingApprovals && (
@@ -202,7 +215,7 @@ export default function Home() {
                   placeholder="พิมพ์คอมเมนต์ที่ต้องการวิเคราะห์..."
                   value={customComment}
                   onChange={(e) => setCustomComment(e.target.value)}
-                  className="w-full p-3 border border-white/40 bg-white/70 rounded-lg text-sm mb-2 outline-none focus:ring-2 focus:ring-blue-300"
+                  className="w-full p-3 border border-slate-300 bg-white rounded-lg text-sm text-slate-900 placeholder:text-slate-500 mb-2 outline-none focus:ring-2 focus:ring-blue-300"
                   rows={4}
                 />
                 <button
@@ -216,7 +229,7 @@ export default function Home() {
 
               {/* Review Samples */}
               <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-                {paginatedReviews.map((r, i) => {
+                {reviews.map((r, i) => {
                   const isAnalyzed = results.some(result => result.comment === r.comment);
                   const isSelected = results.some(result =>
                     result.comment === r.comment && selectedComments.has(result.id)
@@ -224,7 +237,7 @@ export default function Home() {
 
                   return (
                     <button
-                      key={`${currentPage}-${i}`}
+                      key={`${currentPage}-${i}-${r.comment.slice(0, 12)}`}
                       onClick={() => handleCommentSelect(r.comment)}
                       disabled={loading}
                       className={`w-full text-left p-3 border rounded transition text-sm ${
@@ -256,6 +269,9 @@ export default function Home() {
                   );
                 })}
               </div>
+              <p className="mt-3 text-xs text-slate-500">
+                แหล่งข้อมูล: {reviewSource} • ทั้งหมดประมาณ {totalReviews.toLocaleString()} รีวิว
+              </p>
               <div className="mt-4 flex items-center justify-between text-sm">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -282,7 +298,7 @@ export default function Home() {
           <div className="lg:col-span-2">
             <div className="glass-card rounded-2xl shadow-xl p-4">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">✅ รอการอนุมัติ</h2>
+                <h2 className="text-xl font-bold text-slate-900">✅ รอการอนุมัติ</h2>
                 <div className="flex gap-2 text-sm">
                   <span className="text-blue-700">
                     {selectedComments.size} เลือก
@@ -362,14 +378,14 @@ export default function Home() {
                           ) : (
                             <div className="space-y-3">
                               <div>
-                                <p className="text-sm font-medium text-gray-700 mb-1">คอมเมนต์:</p>
-                              <p className="text-sm text-gray-600 bg-white/60 p-2 rounded">
+                                <p className="text-sm font-semibold text-slate-900 mb-1">คอมเมนต์:</p>
+                              <p className="text-sm text-slate-800 bg-white p-2 rounded border border-slate-200">
                                   {result.comment}
                                 </p>
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-1">ความรู้สึก:</p>
+                                  <p className="text-sm font-semibold text-slate-900 mb-1">ความรู้สึก:</p>
                                   <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
                                     result.sentiment === "Positive"
                                       ? "bg-green-100 text-green-800"
@@ -381,7 +397,7 @@ export default function Home() {
                                   </span>
                                 </div>
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-1">ความมั่นใจ:</p>
+                                  <p className="text-sm font-semibold text-slate-900 mb-1">ความมั่นใจ:</p>
                                   <span className="text-sm text-gray-600">
                                     {(result.confidence * 100).toFixed(0)}%
                                   </span>
@@ -389,8 +405,8 @@ export default function Home() {
                               </div>
                               {result.status !== "rejected" && (
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-1">คำตอบ:</p>
-                                  <p className="text-sm text-gray-600 bg-white/60 p-2 rounded">
+                                  <p className="text-sm font-semibold text-slate-900 mb-1">คำตอบ:</p>
+                                  <p className="text-sm text-slate-800 bg-white p-2 rounded border border-slate-200">
                                     {result.reply}
                                   </p>
                                 </div>
