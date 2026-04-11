@@ -34,6 +34,28 @@ type DatasetRow = {
   restaurant_name?: string;
 };
 
+export function reviewScoreForVenue(text: string, venue: Venue): number {
+  const c = compactForMatch(text);
+  return venue.keywords.reduce((score, keyword) => {
+    return c.includes(compactForMatch(keyword)) ? score + 1 : score;
+  }, 0);
+}
+
+export function bestMatchingVenueId(row: DatasetRow | undefined): string | null {
+  if (!row?.review_body) return null;
+
+  const scores = venues.map((venue) => ({
+    venueId: venue.id,
+    score: reviewScoreForVenue(row.review_body ?? "", venue),
+  }));
+  const maxScore = Math.max(...scores.map((s) => s.score));
+  if (maxScore <= 0) return null;
+
+  const winners = scores.filter((s) => s.score === maxScore);
+  if (winners.length !== 1) return null;
+  return winners[0].venueId;
+}
+
 export function rowMatchesVenue(
   row: DatasetRow | undefined,
   venue: Venue,
@@ -53,8 +75,9 @@ export function rowMatchesVenue(
     return venue.keywords.some((keyword) => compactForMatch(keyword) === normalizedName);
   }
 
-  if (row.review_body) {
-    return reviewMatchesVenue(row.review_body, venue);
+  const bestVenueId = bestMatchingVenueId(row);
+  if (bestVenueId) {
+    return bestVenueId === venue.id;
   }
 
   return rowIndexMatchesVenue(rowIndex, venue.id);

@@ -235,21 +235,28 @@ export default function Home() {
     return (
       <main className="min-h-screen p-8 bg-[radial-gradient(circle_at_15%_20%,#dbeafe_0%,transparent_38%),radial-gradient(circle_at_85%_10%,#e0f2fe_0%,transparent_34%),radial-gradient(circle_at_50%_100%,#bfdbfe_0%,transparent_36%),linear-gradient(135deg,#ffffff_0%,#eff6ff_48%,#dbeafe_100%)]">
         <div className="max-w-5xl mx-auto">
-          <div className="mb-10">
-            <h1 className="text-4xl font-bold text-slate-800 mb-2">
-              AI Customer Sentiment & Auto Reply
-            </h1>
-            <p className="text-slate-600 max-w-2xl">
-              รีวิวทั้งหมดมาจากชุด{" "}
-              <a
-                className="text-blue-700 underline"
-                href="https://huggingface.co/datasets/iamwarint/wongnai-restaurant-review"
-                target="_blank"
-                rel="noreferrer"
-              >
-                iamwarint/wongnai-restaurant-review
-              </a>{" "}
-            </p>
+          <div className="mb-10 space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-100/90 px-4 py-2 text-sm font-semibold text-blue-800 shadow-sm ring-1 ring-blue-200">
+              <span>✨ ทดลองเลือก 1 ใน 3 ร้าน</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-blue-700">persona based</span>
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-slate-900 mb-3">
+                AI Customer Sentiment & Auto Reply
+              </h1>
+              <p className="text-slate-600 max-w-2xl text-lg leading-8">
+                รีวิวทั้งหมดมาจากชุด{" "}
+                <a
+                  className="text-blue-700 underline"
+                  href="https://huggingface.co/datasets/iamwarint/wongnai-restaurant-review"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  iamwarint/wongnai-restaurant-review
+                </a>
+                . เลือกร้านเพื่อทดลองสร้างคำตอบตามบุคลิกแบรนด์แต่ละร้าน
+              </p>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {venues.map((v) => (
@@ -257,30 +264,41 @@ export default function Home() {
                 key={v.id}
                 type="button"
                 onClick={() => selectVenue(v.id)}
-                className="glass-card rounded-2xl p-6 text-left shadow-xl border border-white/60 hover:border-blue-300/80 hover:shadow-2xl transition"
+                className="glass-card rounded-[2rem] p-6 text-left shadow-2xl border border-white/70 hover:border-blue-300/80 hover:shadow-[0_30px_70px_rgba(59,130,246,0.18)] transition-all duration-300"
               >
-                <h2 className="text-xl font-bold text-slate-900 mb-1">{v.name}</h2>
-                <p className="text-sm text-slate-500 mb-3">{v.area}</p>
-                <p className="text-sm text-slate-700 mb-3">{v.tagline}</p>
-                <div className="text-xs text-slate-600 space-y-2">
+                <div className="flex items-center justify-between gap-3 mb-5">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900">
+                    {v.id === "common-room" ? "Cafe" : v.id === "hom-duan" ? "Northern" : "Seafood"}
+                  </span>
+                  <span className="text-xs font-semibold text-blue-700">ร้านเดโม</span>
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">{v.name}</h2>
+                <p className="text-sm text-slate-500 mb-4">{v.area}</p>
+                <p className="text-sm text-slate-700 mb-5">{v.tagline}</p>
+                <div className="space-y-2 text-sm text-slate-600 mb-5">
                   <p>
-                    <span className="font-semibold text-slate-800">บุคลิก:</span> {v.personality}
+                    <span className="font-semibold text-slate-900">บุคลิก:</span> {v.personality}
                   </p>
                   <p>
-                    <span className="font-semibold text-slate-800">โทน:</span> {v.tone}
+                    <span className="font-semibold text-slate-900">โทน:</span> {v.tone}
                   </p>
                 </div>
-                <span className="mt-4 inline-block text-sm font-medium text-blue-600">
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
                   เลือกร้านนี้ →
-                </span>
+                </div>
               </button>
             ))}
           </div>
           {venues.length === 0 && (
             <p className="text-center text-slate-500 mt-10">กำลังโหลดรายชื่อร้าน...</p>
           )}
+          {venues.length > 0 && (
+            <p className="text-center text-sm text-slate-600 mt-8 max-w-3xl mx-auto leading-relaxed">
+              เลือกร้านด้านบนเพื่อดูรีวิวจริงจากชุด Wongnai แล้วให้ AI สร้างคำตอบตามบุคลิกแบรนด์แต่ละร้าน
+            </p>
+          )}
           {venuesMeta.totalTrainRows != null && venues.length > 0 && (
-            <p className="text-center text-xs text-slate-500 mt-8 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-center text-xs text-slate-500 mt-4 max-w-2xl mx-auto leading-relaxed">
               ทั้ง split train ~{venuesMeta.totalTrainRows.toLocaleString()} แถว · {venuesMeta.partitionNote}
               {venuesMeta.source && ` · แหล่ง: ${venuesMeta.source}`}
             </p>
