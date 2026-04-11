@@ -249,8 +249,6 @@ export default function Home() {
               >
                 iamwarint/wongnai-restaurant-review
               </a>{" "}
-              (ฟิลด์ <code className="text-slate-800">review_body</code>) ชุดนี้ไม่มีรหัสร้าน — ระบบแบ่งแถวใน split
-              train เป็น 3 ชุดเท่าๆ กันให้สอดกับ 3 โปรไฟล์ร้าน แล้วใช้บุคลิกร้านที่เลือกไปร่างคำตอบ
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -261,9 +259,6 @@ export default function Home() {
                 onClick={() => selectVenue(v.id)}
                 className="glass-card rounded-2xl p-6 text-left shadow-xl border border-white/60 hover:border-blue-300/80 hover:shadow-2xl transition"
               >
-                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
-                  รีวิวใน train ที่อยู่ในชุดของร้านนี้ ~{v.approxReviewCount.toLocaleString()} รายการ
-                </p>
                 <h2 className="text-xl font-bold text-slate-900 mb-1">{v.name}</h2>
                 <p className="text-sm text-slate-500 mb-3">{v.area}</p>
                 <p className="text-sm text-slate-700 mb-3">{v.tagline}</p>
