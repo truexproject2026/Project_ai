@@ -10,48 +10,121 @@ interface Result {
   timestamp: string;
   status: "pending" | "approved" | "rejected";
   id: string;
+  venueId?: string | null;
+  venueName?: string | null;
 }
 
 interface ReviewSample {
   comment: string;
 }
 
+interface VenueOption {
+  id: string;
+  name: string;
+  area: string;
+  tagline: string;
+  personality: string;
+  tone: string;
+  approxReviewCount: number;
+}
+
 export default function Home() {
+  const [venues, setVenues] = useState<VenueOption[]>([]);
+  const [venuesMeta, setVenuesMeta] = useState<{
+    totalTrainRows: number | null;
+    source: string;
+    partitionNote: string;
+  }>({
+    totalTrainRows: null,
+    source: "",
+    partitionNote: "",
+  });
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const selectedVenue = venues.find((v) => v.id === selectedVenueId) ?? null;
+
   const [reviews, setReviews] = useState<ReviewSample[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
   const [customComment, setCustomComment] = useState("");
   const [selectedComments, setSelectedComments] = useState<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState(false);
   const [pendingComment, setPendingComment] = useState<string>("");
-  const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalReviews, setTotalReviews] = useState(0);
+  const [reviewCursor, setReviewCursor] = useState(0);
+  const [nextReviewCursor, setNextReviewCursor] = useState(0);
+  const [reviewDone, setReviewDone] = useState(false);
   const [reviewSource, setReviewSource] = useState("huggingface");
+  const [reviewNote, setReviewNote] = useState("");
 
   useEffect(() => {
-    fetch(`/api/reviews?page=${currentPage}&pageSize=${pageSize}`)
+    fetch("/api/venues")
+      .then((r) => r.json())
+      .then(
+        (data: {
+          venues?: VenueOption[];
+          totalTrainRows?: number | null;
+          partitionNote?: string;
+          source?: string;
+        }) => {
+          setVenues(data.venues ?? []);
+          setVenuesMeta({
+            totalTrainRows: data.totalTrainRows ?? null,
+            partitionNote: data.partitionNote ?? "",
+            source: data.source ?? "",
+          });
+        }
+      );
+  }, []);
+
+  useEffect(() => {
+    if (!selectedVenueId) return;
+    setReviewsLoading(true);
+    fetch(
+      `/api/reviews?venueId=${selectedVenueId}&cursor=${reviewCursor}&pageSize=${pageSize}`
+    )
       .then((r) => r.json())
       .then(
         (data: {
           reviews: ReviewSample[];
-          totalPages: number;
-          total: number;
+          nextCursor: number;
+          done: boolean;
           source: string;
+          note?: string;
         }) => {
           setReviews(data.reviews ?? []);
-          setTotalPages(data.totalPages ?? 1);
-          setTotalReviews(data.total ?? 0);
+          setReviewDone(Boolean(data.done));
+          setNextReviewCursor(typeof data.nextCursor === "number" ? data.nextCursor : 0);
           setReviewSource(data.source ?? "huggingface");
+          setReviewNote(typeof data.note === "string" ? data.note : "");
         }
-      );
-  }, [currentPage]);
+      )
+      .finally(() => setReviewsLoading(false));
+  }, [selectedVenueId, reviewCursor]);
 
   const hasPendingApprovals = results.some(r => r.status === "pending");
 
+  function selectVenue(id: string) {
+    setSelectedVenueId(id);
+    setReviewCursor(0);
+    setNextReviewCursor(0);
+    setReviewNote("");
+    setResults([]);
+    setSelectedComments(new Set());
+  }
+
+  function changeVenue() {
+    setSelectedVenueId(null);
+    setReviewCursor(0);
+    setNextReviewCursor(0);
+    setReviewNote("");
+    setReviews([]);
+    setResults([]);
+    setSelectedComments(new Set());
+  }
+
   async function analyze(text: string) {
-    if (!text.trim()) return;
+    if (!text.trim() || !selectedVenueId) return;
 
     // Check if already analyzed
     const existing = results.find(r => r.comment === text);
@@ -66,7 +139,7 @@ export default function Home() {
       const res = await fetch("/api/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: text }),
+        body: JSON.stringify({ comment: text, venueId: selectedVenueId }),
       });
 
       const data = await res.json();
@@ -74,7 +147,9 @@ export default function Home() {
         comment: text,
         ...data,
         status: "pending",
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        venueId: data.venueId ?? selectedVenueId,
+        venueName: data.venueName ?? selectedVenue?.name ?? null,
       };
 
       setResults(prev => [newResult, ...prev]);
@@ -156,15 +231,106 @@ export default function Home() {
     });
   };
 
+  if (!selectedVenueId || !selectedVenue) {
+    return (
+      <main className="min-h-screen p-8 bg-[radial-gradient(circle_at_15%_20%,#dbeafe_0%,transparent_38%),radial-gradient(circle_at_85%_10%,#e0f2fe_0%,transparent_34%),radial-gradient(circle_at_50%_100%,#bfdbfe_0%,transparent_36%),linear-gradient(135deg,#ffffff_0%,#eff6ff_48%,#dbeafe_100%)]">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-10">
+            <h1 className="text-4xl font-bold text-slate-800 mb-2">
+              AI Customer Sentiment & Auto Reply
+            </h1>
+            <p className="text-slate-600 max-w-2xl">
+              รีวิวทั้งหมดมาจากชุด{" "}
+              <a
+                className="text-blue-700 underline"
+                href="https://huggingface.co/datasets/iamwarint/wongnai-restaurant-review"
+                target="_blank"
+                rel="noreferrer"
+              >
+                iamwarint/wongnai-restaurant-review
+              </a>{" "}
+              (ฟิลด์ <code className="text-slate-800">review_body</code>) ชุดนี้ไม่มีรหัสร้าน — ระบบแบ่งแถวใน split
+              train เป็น 3 ชุดเท่าๆ กันให้สอดกับ 3 โปรไฟล์ร้าน แล้วใช้บุคลิกร้านที่เลือกไปร่างคำตอบ
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {venues.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => selectVenue(v.id)}
+                className="glass-card rounded-2xl p-6 text-left shadow-xl border border-white/60 hover:border-blue-300/80 hover:shadow-2xl transition"
+              >
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
+                  รีวิวใน train ที่อยู่ในชุดของร้านนี้ ~{v.approxReviewCount.toLocaleString()} รายการ
+                </p>
+                <h2 className="text-xl font-bold text-slate-900 mb-1">{v.name}</h2>
+                <p className="text-sm text-slate-500 mb-3">{v.area}</p>
+                <p className="text-sm text-slate-700 mb-3">{v.tagline}</p>
+                <div className="text-xs text-slate-600 space-y-2">
+                  <p>
+                    <span className="font-semibold text-slate-800">บุคลิก:</span> {v.personality}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">โทน:</span> {v.tone}
+                  </p>
+                </div>
+                <span className="mt-4 inline-block text-sm font-medium text-blue-600">
+                  เลือกร้านนี้ →
+                </span>
+              </button>
+            ))}
+          </div>
+          {venues.length === 0 && (
+            <p className="text-center text-slate-500 mt-10">กำลังโหลดรายชื่อร้าน...</p>
+          )}
+          {venuesMeta.totalTrainRows != null && venues.length > 0 && (
+            <p className="text-center text-xs text-slate-500 mt-8 max-w-2xl mx-auto leading-relaxed">
+              ทั้ง split train ~{venuesMeta.totalTrainRows.toLocaleString()} แถว · {venuesMeta.partitionNote}
+              {venuesMeta.source && ` · แหล่ง: ${venuesMeta.source}`}
+            </p>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen p-8 bg-[radial-gradient(circle_at_15%_20%,#dbeafe_0%,transparent_38%),radial-gradient(circle_at_85%_10%,#e0f2fe_0%,transparent_34%),radial-gradient(circle_at_50%_100%,#bfdbfe_0%,transparent_36%),linear-gradient(135deg,#ffffff_0%,#eff6ff_48%,#dbeafe_100%)]">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-800 mb-2">
-            AI Customer Sentiment & Auto Reply
-          </h1>
-          <p className="text-slate-600">Smart moderation dashboard with human approval workflow</p>
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-slate-800 mb-2">
+              AI Customer Sentiment & Auto Reply
+            </h1>
+            <p className="text-slate-600">Smart moderation dashboard with human approval workflow</p>
+          </div>
+          <button
+            type="button"
+            onClick={changeVenue}
+            className="shrink-0 px-4 py-2 rounded-xl border border-slate-300 bg-white/80 text-slate-800 text-sm font-medium hover:bg-white"
+          >
+            เปลี่ยนร้าน
+          </button>
+        </div>
+
+        <div className="glass-card rounded-2xl p-4 mb-6 border border-blue-100/80 bg-white/70">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">ร้านที่เลือก</p>
+              <h2 className="text-2xl font-bold text-slate-900">{selectedVenue.name}</h2>
+              <p className="text-sm text-slate-600">{selectedVenue.area} · {selectedVenue.tagline}</p>
+            </div>
+            <div className="text-sm text-slate-700 max-w-xl">
+              <p>
+                <span className="font-semibold text-slate-900">บุคลิก:</span> {selectedVenue.personality}
+              </p>
+              <p className="mt-1">
+                <span className="font-semibold text-slate-900">โทนตอบ:</span> {selectedVenue.tone}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Warning Dialog */}
@@ -220,7 +386,7 @@ export default function Home() {
                 />
                 <button
                   onClick={() => handleCommentSelect(customComment)}
-                  disabled={loading || !customComment.trim()}
+                  disabled={loading || !customComment.trim() || !selectedVenueId}
                   className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
                 >
                   {loading ? "กำลังวิเคราะห์..." : "วิเคราะห์"}
@@ -229,6 +395,14 @@ export default function Home() {
 
               {/* Review Samples */}
               <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+                {reviewsLoading && (
+                  <p className="text-sm text-slate-500 py-4 text-center">กำลังโหลดรีวิวของร้านนี้...</p>
+                )}
+                {!reviewsLoading && reviews.length === 0 && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    ไม่มีรีวิวในหน้านี้ (อาจสแกนจบชุดแล้ว) ลองกด &quot;เริ่มต้นใหม่&quot; หรือรอให้เชื่อมต่อ Hugging Face กลับมา
+                  </p>
+                )}
                 {reviews.map((r, i) => {
                   const isAnalyzed = results.some(result => result.comment === r.comment);
                   const isSelected = results.some(result =>
@@ -237,7 +411,7 @@ export default function Home() {
 
                   return (
                     <button
-                      key={`${currentPage}-${i}-${r.comment.slice(0, 12)}`}
+                      key={`${reviewCursor}-${i}-${r.comment.slice(0, 12)}`}
                       onClick={() => handleCommentSelect(r.comment)}
                       disabled={loading}
                       className={`w-full text-left p-3 border rounded transition text-sm ${
@@ -270,25 +444,40 @@ export default function Home() {
                 })}
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                แหล่งข้อมูล: {reviewSource} • ทั้งหมดประมาณ {totalReviews.toLocaleString()} รีวิว
+                ข้อความจากฟิลด์ review_body ของชุด Wongnai (หรือชุดสำรองในโปรเจกต์เมื่อ HF ไม่พร้อม) · แหล่ง:{" "}
+                {reviewSource}
               </p>
-              <div className="mt-4 flex items-center justify-between text-sm">
+              {reviewNote && (
+                <p className="mt-2 text-xs text-slate-600 leading-relaxed">{reviewNote}</p>
+              )}
+              <div className="mt-4 flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReviewCursor(0)}
+                    disabled={reviewCursor === 0 || reviewsLoading}
+                    className="px-3 py-1.5 rounded-lg border border-white/50 bg-white/60 hover:bg-white/80 disabled:opacity-40"
+                  >
+                    เริ่มต้นใหม่
+                  </button>
+                  <span className="text-slate-600 text-xs text-right">
+                    cursor {reviewCursor.toLocaleString()}
+                    {nextReviewCursor > reviewCursor
+                      ? ` → ${nextReviewCursor.toLocaleString()}`
+                      : ""}
+                  </span>
+                </div>
                 <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1.5 rounded-lg border border-white/50 bg-white/60 hover:bg-white/80 disabled:opacity-40"
+                  type="button"
+                  onClick={() => setReviewCursor(nextReviewCursor)}
+                  disabled={
+                    reviewDone ||
+                    reviewsLoading ||
+                    nextReviewCursor === reviewCursor
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100 disabled:opacity-40 text-sm font-medium"
                 >
-                  ← ก่อนหน้า
-                </button>
-                <span className="text-slate-600">
-                  หน้า {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1.5 rounded-lg border border-white/50 bg-white/60 hover:bg-white/80 disabled:opacity-40"
-                >
-                  ถัดไป →
+                  {reviewDone ? "สแกนครบชุดแล้ว" : "โหลดชุดถัดไป"}
                 </button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeWithTrainingData, buildReplyFromTrainingData } from "@/lib/trainingDataset";
+import { getVenueById, type Venue } from "@/lib/venues";
 
 type LlmResult = {
   sentiment?: "Positive" | "Neutral" | "Negative";
@@ -82,9 +83,20 @@ function safeJsonParse(text: string): LlmResult | null {
   }
 }
 
-async function generateReplyWithLlm(comment: string): Promise<LlmResult | null> {
-  const prompt = `บทบาท: คุณคือ "แอดมินร้านคาเฟ่" ที่ต้องตอบลูกค้าเพื่อดูแลประสบการณ์
-เป้าหมาย: ตอบลูกค้าอย่างมืออาชีพตามบริบทจริงของคอมเมนต์ทั้งก้อน
+function buildVenueBlock(venue: Venue): string {
+  return `ร้านที่กำลังตอบ: ${venue.name} (${venue.area})
+แนวร้าน: ${venue.tagline}
+บุคลิกแบรนด์: ${venue.personality}
+โทนการตอบ: ${venue.tone}
+ให้ร่างคำตอบให้สอดคล้องบุคลิกและโทนนี้ แต่ยังตรงประเด็นในคอมเมนต์จริง`;
+}
+
+async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<LlmResult | null> {
+  const venueBlock = venue
+    ? `${buildVenueBlock(venue)}\n\n`
+    : `บทบาท: คุณคือ "แอดมินร้านอาหาร/คาเฟ่" ที่ต้องตอบลูกค้าเพื่อดูแลประสบการณ์\n`;
+
+  const prompt = `${venueBlock}เป้าหมาย: ตอบลูกค้าอย่างมืออาชีพตามบริบทจริงของคอมเมนต์ทั้งก้อน
 อ่านคอมเมนต์ทั้งข้อความ ห้ามสรุปจากคำเดี่ยว ห้ามเดาเมนูที่ไม่ได้ถูกพูดถึง
 
 ตอบเป็น JSON เท่านั้น ในรูปแบบ:
@@ -199,7 +211,7 @@ ${comment}`;
 
 export async function POST(req: Request) {
   try {
-    const { comment } = await req.json();
+    const { comment, venueId } = await req.json();
 
     if (!comment || typeof comment !== "string") {
       return NextResponse.json(
@@ -208,8 +220,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const venue =
+      typeof venueId === "string" && venueId.length > 0 ? getVenueById(venueId) : undefined;
+    if (typeof venueId === "string" && venueId.length > 0 && !venue) {
+      return NextResponse.json({ error: "venueId ไม่ถูกต้อง" }, { status: 400 });
+    }
+
     const analysis = analyzeWithTrainingData(comment);
-    const llm = await generateReplyWithLlm(comment);
+    const llm = await generateReplyWithLlm(comment, venue);
     const reply =
       llm?.reply?.trim() ||
       buildReplyFromTrainingData(comment, analysis.sentiment, analysis.aspect);
@@ -230,6 +248,8 @@ export async function POST(req: Request) {
       llmUsed: Boolean(llm?.reply),
       status: "pending",
       timestamp: new Date().toISOString(),
+      venueId: venue?.id ?? null,
+      venueName: venue?.name ?? null,
     });
   } catch (error) {
     console.error("[API] Error:", error);
