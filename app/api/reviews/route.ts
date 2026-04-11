@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import sampleReviews from "@/data/sample_reviews.json";
-import { getVenueById, rowIndexMatchesVenue } from "@/lib/venues";
+import { getVenueById, rowMatchesVenue, rowIndexMatchesVenue } from "@/lib/venues";
 
 type DatasetRow = {
   row?: {
     review_body?: string;
+    restaurant_id?: string;
+    restaurant_name?: string;
   };
 };
 
@@ -46,6 +48,7 @@ export async function GET(req: Request) {
   let i = cursor;
   let scanned = 0;
   let totalTrain = 0;
+  let hasMetadata = false;
 
   try {
     const sizeRes = await fetch(SIZE_URL);
@@ -65,11 +68,14 @@ export async function GET(req: Request) {
       const rows = rowsData.rows ?? [];
       if (rows.length === 0) break;
 
+      hasMetadata ||= rows.some((row) => row?.row?.restaurant_id || row?.row?.restaurant_name);
+
       for (let j = 0; j < rows.length; j += 1) {
         if (reviews.length >= pageSize) break;
         const globalIndex = i + j;
-        if (!rowIndexMatchesVenue(globalIndex, venue.id)) continue;
-        const comment = rows[j]?.row?.review_body?.trim();
+        const row = rows[j]?.row;
+        if (!rowMatchesVenue(row, venue, globalIndex)) continue;
+        const comment = row?.review_body?.trim();
         if (comment) {
           reviews.push({ comment });
         }
@@ -81,6 +87,10 @@ export async function GET(req: Request) {
 
     const done = i >= totalTrain;
 
+    const sourceNote = hasMetadata
+      ? "Dataset มี metadata ร้าน จึงแมปรีวิวกับร้านได้จากฟิลด์จริง"
+      : "รีวิวเป็นของจริงจากชุด iamwarint/wongnai-restaurant-review แต่การเลือกเสนอร้านเป็นการจัดตาม persona/brand profile โดยใช้ keyword ประเภทร้าน ไม่ใช่ matching ร้านจริงจาก metadata";
+
     return NextResponse.json({
       reviews,
       nextCursor: i,
@@ -90,8 +100,7 @@ export async function GET(req: Request) {
       venueName: venue.name,
       totalTrainRows: totalTrain,
       source: "huggingface",
-      note:
-        "ทุกข้อความดึงจาก review_body ของชุด iamwarint/wongnai-restaurant-review (split train) โดยตรง ชุดนี้ไม่มีรหัสร้าน — แบ่งแถวตามดัชนีใน train (index mod 3) ให้สอดคล้องกับ 3 โปรไฟล์ร้านในเดโม",
+      note: sourceNote,
     });
   } catch (error) {
     console.error("[reviews] HF error, local fallback:", error);
