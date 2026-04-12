@@ -47,31 +47,12 @@ function extractMentionedMenuItems(comment: string): string[] {
 }
 
 function enforceReplyStyle(comment: string, reply: string): string {
-  const cleaned = reply
+  // เปลี่ยนคำที่ไม่ต้องการให้ใช้ โดยยังรักษาเนื้อความเดิมที่ AI วิเคราะห์มา
+  return reply
     .replace(/ท่าน/g, "คุณลูกค้า")
     .replace(/ลูกค้าท่าน/g, "คุณลูกค้า")
+    .replace(/\[เมนู\]/g, "") // เผื่อ AI ใส่ placeholder มา
     .trim();
-
-  const mentionedInComment = extractMentionedMenuItems(comment);
-  const mentionedInReply = extractMentionedMenuItems(cleaned);
-
-  // If model invents specific menu not in comment, fallback to safer response.
-  const inventedSpecificMenu = mentionedInReply.some(
-    (item) => !mentionedInComment.includes(item)
-  );
-
-  if (inventedSpecificMenu) {
-    if (normalizeText(comment).includes("ไม่อร่อย")) {
-      return "ต้องขออภัยคุณลูกค้าด้วยนะคะที่รสชาติยังไม่ถูกใจ ทางร้านจะนำคำแนะนำไปปรับปรุงทันทีค่ะ";
-    }
-    return "ขอบคุณคุณลูกค้าสำหรับความคิดเห็นนะคะ ทางร้านรับฟังและจะนำไปปรับปรุงให้ดีขึ้นค่ะ";
-  }
-
-  if (mentionedInComment.length === 0 && normalizeText(comment).includes("ไม่อร่อย")) {
-    return "ต้องขออภัยคุณลูกค้าด้วยนะคะที่รสชาติยังไม่ถูกใจ ทางร้านจะนำคำแนะนำไปปรับปรุงทันทีค่ะ";
-  }
-
-  return cleaned;
 }
 
 function safeJsonParse(text: string): LlmResult | null {
@@ -147,6 +128,12 @@ async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<Llm
           maxOutputTokens: 500, 
           responseMimeType: "application/json" 
         },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
       }),
     });
     if (!res.ok) throw new Error("Gemini error");

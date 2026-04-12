@@ -68,6 +68,10 @@ const negativeHints = [
   "เปรี้ยว",
   "เค็ม",
   "หวานเกิน",
+  "ไม่อร่อย",
+  "รสชาติไม่ดี",
+  "ไม่โอเค",
+  "ไม่ประทับใจ",
 ];
 
 const complaintPhrases = [
@@ -80,6 +84,7 @@ const complaintPhrases = [
   "ต้องปรับปรุง",
   "ให้น้อย",
   "น้อยไป",
+  "ไม่อร่อย",
 ];
 
 const contrastWords = ["แต่", "แต่ว่า", "however"];
