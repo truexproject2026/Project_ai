@@ -27,6 +27,7 @@ type LlmResult = {
   reply?: string;
   confidence?: number;
   reasoning?: string;
+  error?: string;
 };
 
 function enforceReplyStyle(comment: string, reply: string): string {
@@ -62,7 +63,9 @@ function buildVenueBlock(venue: Venue): string {
 
 async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<LlmResult | null> {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  if (!key) {
+    return { error: "ไม่พบ GEMINI_API_KEY ในระบบ (ตรวจสอบไฟล์ .env)" };
+  }
 
   const ragExamples = venue ? getVenueSpecificExamples(venue.id) : "";
   const venueBlock = venue ? buildVenueBlock(venue) : "บทบาท: แอดมินร้านอาหาร/คาเฟ่มืออาชีพ";
@@ -101,24 +104,29 @@ async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<Llm
       }),
     });
 
-    if (!res.ok) throw new Error(`Gemini API Error: ${res.status}`);
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`Gemini API Error: ${res.status} - ${JSON.stringify(errData)}`);
+    }
+
     const data = await res.json();
     
     // Check if blocked by safety
     const candidate = data.candidates?.[0];
     if (candidate?.finishReason === "SAFETY") {
       return {
-        reply: null, // Force fallback but with reasoning
-        reasoning: "AI ปฏิเสธการตอบเนื่องจากตรวจพบคำศัพท์ที่สุ่มเสี่ยง (Safety Block) ระบบกำลังใช้ฐานข้อมูลสำรอง..."
+        error: "AI ปฏิเสธการตอบเนื่องจากตรวจพบคำศัพท์ที่สุ่มเสี่ยง (Safety Block)"
       };
     }
 
     const text = candidate?.content?.parts?.[0]?.text ?? "";
     const result = safeJsonParse(text);
+    if (!result) return { error: "AI ตอบกลับมาในรูปแบบที่ระบบไม่อ่านไม่ได้ (Invalid JSON)" };
+    
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("LLM Fetch Error:", error);
-    return null;
+    return { error: `เกิดข้อผิดพลาดในการเชื่อมต่อ AI: ${error.message}` };
   }
 }
 
@@ -138,15 +146,23 @@ export async function POST(req: Request) {
     // Analyze locally as backup
     const analysis = analyzeWithTrainingData(comment);
     
-    // Determine final reply: Use AI if available and NOT blocked, otherwise use enhanced fallback
+    // Determine final reply
     let finalReply = "";
-    let reasoning = llm?.reasoning ?? "วิเคราะห์จากฐานข้อมูลตัวอย่างเดิม";
+    let reasoning = "";
     let llmUsed = false;
 
     if (llm && llm.reply) {
       finalReply = enforceReplyStyle(comment, llm.reply);
+      reasoning = llm.reasoning || "AI วิเคราะห์บริบทสำเร็จ";
       llmUsed = true;
     } else {
+      // Logic for fallback reasoning
+      if (llm?.error) {
+        reasoning = `[AI Error] ${llm.error} -> กำลังใช้ระบบสำรอง...`;
+      } else {
+        reasoning = "ระบบวิเคราะห์จากฐานข้อมูลตัวอย่างเดิม (AI ไม่ทำงาน)";
+      }
+
       // Enhanced Fallback Logic for complex reviews
       const text = comment.toLowerCase();
       if (text.includes("บรรยากาศ") || text.includes("สงบ") || text.includes("น่านั่ง")) {
