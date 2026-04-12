@@ -67,6 +67,7 @@ export default function Home() {
   const [selectedComments, setSelectedComments] = useState<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState(false);
   const [pendingComment, setPendingComment] = useState<string>("");
+  const [processingComment, setProcessingComment] = useState<string | null>(null);
   const pageSize = 10;
   const [reviewCursor, setReviewCursor] = useState(0);
   const [nextReviewCursor, setNextReviewCursor] = useState(0);
@@ -259,6 +260,7 @@ export default function Home() {
     }
 
     setLoading(true);
+    setProcessingComment(text);
     try {
       const res = await fetch("/api/reply", {
         method: "POST",
@@ -282,6 +284,7 @@ export default function Home() {
       console.error("Error analyzing comment:", error);
     } finally {
       setLoading(false);
+      setProcessingComment(null);
       setCustomComment("");
     }
   }
@@ -542,7 +545,7 @@ export default function Home() {
                         disabled={loading || !customComment.trim()}
                         className="absolute bottom-3 right-3 p-2 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-30"
                       >
-                        <Search size={16} />
+                        {loading ? <RefreshCw size={16} className="animate-spin" /> : <Search size={16} />}
                       </button>
                     </div>
                   </div>
@@ -559,22 +562,31 @@ export default function Home() {
                     ) : reviews.map((r, i) => {
                       const isAnalyzed = results.some(res => res.comment === r.comment);
                       const isSelected = results.some(res => res.comment === r.comment && selectedComments.has(res.id));
+                      const isProcessing = processingComment === r.comment;
 
                       return (
                         <button
                           key={i}
                           onClick={() => handleCommentSelect(r.comment)}
-                          className={`w-full text-left p-4 rounded-2xl transition-all border ${
+                          disabled={loading && !isProcessing}
+                          className={`w-full text-left p-4 rounded-2xl transition-all border group relative ${
                             isSelected 
                               ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100" 
                               : isAnalyzed 
                                 ? "bg-slate-50 border-slate-100 text-slate-400" 
-                                : "bg-white border-slate-100 text-slate-700 hover:border-blue-300 hover:shadow-sm"
-                          }`}
+                                : isProcessing
+                                  ? "bg-blue-50 border-blue-200 text-blue-700"
+                                  : "bg-white border-slate-100 text-slate-700 hover:border-blue-300 hover:shadow-sm"
+                          } disabled:opacity-50`}
                         >
-                          <p className={`text-xs leading-relaxed line-clamp-2 ${isSelected ? "font-bold" : "font-medium"}`}>
-                            {r.comment}
-                          </p>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={`text-xs leading-relaxed line-clamp-2 flex-1 ${isSelected ? "font-bold" : "font-medium"}`}>
+                              {r.comment}
+                            </p>
+                            {isProcessing && (
+                              <RefreshCw size={14} className="animate-spin shrink-0 text-blue-600 mt-0.5" />
+                            )}
+                          </div>
                         </button>
                       );
                     })}
