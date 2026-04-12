@@ -63,23 +63,44 @@ export function rowMatchesVenue(
 ): boolean {
   if (!row) return false;
 
-  if (row.restaurant_id) {
-    return row.restaurant_id === venue.id;
-  }
-
+  // 1. Metadata Match (Highest priority)
+  if (row.restaurant_id && row.restaurant_id === venue.id) return true;
   if (row.restaurant_name) {
     const normalizedName = compactForMatch(row.restaurant_name);
-    if (compactForMatch(venue.name) === normalizedName) {
-      return true;
+    if (compactForMatch(venue.name) === normalizedName) return true;
+    if (venue.keywords.some((keyword) => compactForMatch(keyword) === normalizedName)) return true;
+  }
+
+  // 2. Keyword Scoring
+  const scores = venues.map((v) => ({
+    id: v.id,
+    score: reviewScoreForVenue(row.review_body ?? "", v),
+  }));
+  
+  const maxScore = Math.max(...scores.map((s) => s.score));
+  const currentVenueScore = scores.find(s => s.id === venue.id)?.score ?? 0;
+
+  if (maxScore > 0) {
+    // RULE 1: Only show if there is a UNIQUE winner (No ties)
+    const winners = scores.filter(s => s.score === maxScore);
+    if (winners.length > 1) return false; // Too ambiguous (e.g., mentions both Coffee and Seafood)
+
+    // RULE 2: If this is NOT the current venue's win, reject
+    if (currentVenueScore !== maxScore) return false;
+
+    // RULE 3: Strict Exclusions (Negative Match)
+    // If we are Seafood/Northern but it mentions strong Cafe keywords, reject.
+    const text = compactForMatch(row.review_body ?? "");
+    const cafeKeywords = ["กาแฟ", "คาเฟ่", "cafe", "coffee", "ลาเต้", "latte", "ขนมหวาน"];
+    if ((venue.id === "hom-duan" || venue.id === "tid-din") && 
+        cafeKeywords.some(k => text.includes(compactForMatch(k)))) {
+      return false;
     }
-    return venue.keywords.some((keyword) => compactForMatch(keyword) === normalizedName);
+
+    return true;
   }
 
-  const bestVenueId = bestMatchingVenueId(row);
-  if (bestVenueId) {
-    return bestVenueId === venue.id;
-  }
-
+  // 3. Fallback: No keywords matched ANY venue
   return rowIndexMatchesVenue(rowIndex, venue.id);
 }
 

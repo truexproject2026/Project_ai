@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { Check, X, MessageSquare, Clock, ShieldCheck, TrendingUp } from "lucide-react";
 
 interface ResultCardProps {
   comment: string;
@@ -24,63 +25,86 @@ export default function ResultCard({
   const [editedReply, setEditedReply] = useState(reply);
 
   const sentimentColors = {
-    Positive: "bg-green-100 text-green-800",
-    Negative: "bg-red-100 text-red-800",
-    Neutral: "bg-gray-100 text-gray-800",
+    Positive: "bg-green-100 text-green-700 border-green-200",
+    Negative: "bg-red-100 text-red-700 border-red-200",
+    Neutral: "bg-slate-100 text-slate-700 border-slate-200",
   };
 
   const handleApprove = async () => {
     setIsApproving(true);
     if (onApprove) {
-      await onApprove(editedReply);
+      onApprove(editedReply);
     }
     setIsApproving(false);
   };
 
   return (
-    <div className="border border-white/50 rounded-xl p-4 bg-white/65 backdrop-blur-md shadow-lg">
-      <div className="mb-4">
-        <p className="text-sm text-slate-600">{new Date(timestamp).toLocaleString()}</p>
-        <p className="mt-2 p-3 bg-white border border-slate-200 rounded-lg text-slate-900">
-          <b>Comment:</b> {comment}
-        </p>
-      </div>
-
-      <div className="flex gap-4 mb-4">
-        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+    <div className="border border-slate-200 rounded-2xl p-5 bg-white shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-slate-400 text-xs font-medium">
+          <Clock size={14} />
+          <span>{new Date(timestamp).toLocaleString('th-TH')}</span>
+        </div>
+        <div className={`px-3 py-1 rounded-full text-xs font-bold border ${
           sentimentColors[sentiment as keyof typeof sentimentColors] || sentimentColors.Neutral
         }`}>
           {sentiment}
-        </span>
-        <span className="text-sm text-slate-700 font-medium">
-          Confidence: {(confidence * 100).toFixed(0)}%
-        </span>
+        </div>
       </div>
 
-      <div className="mb-4">
-        <label className="block text-sm font-semibold text-slate-900 mb-2">📝 Draft Reply:</label>
-        <textarea
-          value={editedReply}
-          onChange={(e) => setEditedReply(e.target.value)}
-          className="w-full p-3 border border-slate-300 bg-white rounded-md font-thai text-sm text-slate-900 placeholder:text-slate-500"
-          rows={3}
-        />
-      </div>
+      <div className="space-y-4">
+        <div>
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            <MessageSquare size={14} />
+            Customer Review
+          </label>
+          <div className="p-4 bg-slate-50 rounded-xl text-slate-800 text-sm leading-relaxed whitespace-pre-wrap border border-slate-100 max-h-60 overflow-y-auto">
+            {comment}
+          </div>
+        </div>
 
-      <div className="flex gap-3 justify-end">
-        <button
-          onClick={onReject}
-          className="px-4 py-2 border border-white/50 rounded hover:bg-white/70"
-        >
-          💬 Edit
-        </button>
-        <button
-          onClick={handleApprove}
-          disabled={isApproving}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-        >
-          {isApproving ? "Approving..." : "✓ Approve"}
-        </button>
+        <div className="flex items-center gap-4 py-2 border-y border-slate-50">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <TrendingUp size={14} className="text-blue-500" />
+            <span>Confidence Score:</span>
+            <span className="text-slate-900 font-bold">{(confidence * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            <ShieldCheck size={14} className="text-green-500" />
+            Draft Response
+          </label>
+          <textarea
+            value={editedReply}
+            onChange={(e) => setEditedReply(e.target.value)}
+            className="w-full p-4 border border-slate-200 bg-white rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all min-h-[120px] resize-y"
+            placeholder="พิมพ์คำตอบที่ต้องการแก้ไข..."
+          />
+        </div>
+
+        <div className="flex gap-3 justify-end pt-2">
+          <button
+            onClick={onReject}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            <X size={16} />
+            Reject
+          </button>
+          <button
+            onClick={handleApprove}
+            disabled={isApproving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-blue-600 disabled:opacity-50 transition-all shadow-lg shadow-slate-200"
+          >
+            {isApproving ? "Processing..." : (
+              <>
+                <Check size={16} />
+                Approve & Post
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

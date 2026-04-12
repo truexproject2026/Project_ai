@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 import sampleReviews from "@/data/sample_reviews.json";
 import { getVenueById, rowMatchesVenue, rowIndexMatchesVenue } from "@/lib/venues";
 
@@ -27,9 +29,46 @@ const SIZE_URL =
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const venueId = searchParams.get("venueId") ?? "";
+  const source = searchParams.get("source") ?? "huggingface";
   const cursor = Math.max(0, Number(searchParams.get("cursor") ?? "0"));
   const pageSize = Math.min(50, Math.max(5, Number(searchParams.get("pageSize") ?? "10")));
-  const maxScan = Math.min(20000, Math.max(200, Number(searchParams.get("maxScan") ?? "8000")));
+  const maxScan = 30000; // Increased even further for strict filtering
+
+  const reviews: { comment: string }[] = [];
+
+  // Handle Custom Dataset Source
+  if (source === "custom") {
+    try {
+      const customPath = path.join(process.cwd(), "data/custom_reviews.json");
+      if (fs.existsSync(customPath)) {
+        const content = fs.readFileSync(customPath, "utf-8");
+        const all = JSON.parse(content) as { comment: string }[];
+        const chunk = all.slice(cursor, cursor + pageSize);
+        
+        return NextResponse.json({
+          reviews: chunk,
+          nextCursor: cursor + chunk.length,
+          done: cursor + chunk.length >= all.length,
+          pageSize,
+          venueId: "custom",
+          venueName: "Custom Dataset",
+          totalTrainRows: all.length,
+          source: "custom-file",
+          note: "ข้อมูลจากไฟล์ที่คุณอัปโหลด",
+        });
+      } else {
+        return NextResponse.json({
+          error: "ยังไม่มีไฟล์ข้อมูลที่อัปโหลด",
+          reviews: [],
+          nextCursor: 0,
+          done: true,
+        }, { status: 404 });
+      }
+    } catch (error) {
+      console.error("[custom reviews] error:", error);
+      return NextResponse.json({ error: "Failed to read custom dataset" }, { status: 500 });
+    }
+  }
 
   const venue = getVenueById(venueId);
   if (!venue) {
@@ -44,7 +83,6 @@ export async function GET(req: Request) {
     );
   }
 
-  const reviews: { comment: string }[] = [];
   let i = cursor;
   let scanned = 0;
   let totalTrain = 0;
@@ -53,54 +91,51 @@ export async function GET(req: Request) {
   try {
     const sizeRes = await fetch(SIZE_URL);
     if (!sizeRes.ok) throw new Error("Failed to fetch dataset size");
-    const sizeData = (await sizeRes.json()) as {
-      size?: { splits?: Array<{ split?: string; num_rows?: number }> };
-    };
-    const trainSplit = sizeData.size?.splits?.find((s) => s.split === "train");
+    const sizeData = await sizeRes.json();
+    const trainSplit = sizeData.size?.splits?.find((s: any) => s.split === "train");
     totalTrain = trainSplit?.num_rows ?? 0;
 
-    const chunk = 100;
-    const concurrency = 4; // Fetch 400 rows in parallel per step
+    const step = 100; // Fetch 100 rows at a time
+    let currentOffset = i;
 
-    while (reviews.length < pageSize && i < totalTrain && scanned < maxScan) {
-      const remainingToScan = maxScan - scanned;
-      const currentBatchSize = Math.min(concurrency, Math.ceil(remainingToScan / chunk));
-      
-      const fetchPromises = [];
-      for (let b = 0; b < currentBatchSize; b++) {
-        const offset = i + (b * chunk);
-        if (offset < totalTrain) {
-          fetchPromises.push(fetch(ROWS_URL(offset, chunk)).then(res => res.ok ? res.json() : { rows: [] }));
-        }
+    while (reviews.length < pageSize && currentOffset < totalTrain && scanned < maxScan) {
+      const res = await fetch(ROWS_URL(currentOffset, step));
+      if (!res.ok) {
+        console.warn(`[HF API] Failed at offset ${currentOffset}`);
+        break; 
       }
-
-      const results = await Promise.all(fetchPromises);
       
-      for (const data of results) {
-        const rows = (data as any).rows ?? [];
-        if (rows.length === 0) continue;
+      const data = await res.json();
+      const rows = data.rows ?? [];
+      
+      if (rows.length === 0) break;
 
-        for (let j = 0; j < rows.length; j += 1) {
-          if (reviews.length >= pageSize) break;
-          const globalIndex = i + j;
-          const row = rows[j]?.row;
-          
-          hasMetadata ||= !!(row?.restaurant_id || row?.restaurant_name);
+      for (let j = 0; j < rows.length; j++) {
+        const rowData = rows[j].row;
+        const globalIndex = currentOffset + j;
+        
+        hasMetadata ||= !!(rowData?.restaurant_id || rowData?.restaurant_name);
 
-          if (rowMatchesVenue(row, venue, globalIndex)) {
-            const comment = row?.review_body?.trim();
-            if (comment) {
-              reviews.push({ comment });
-            }
+        if (rowMatchesVenue(rowData, venue, globalIndex)) {
+          const comment = rowData?.review_body?.trim();
+          if (comment) {
+            reviews.push({ comment });
           }
         }
         
-        scanned += rows.length;
-        i += rows.length;
-        if (reviews.length >= pageSize) break;
+        scanned++;
+        if (reviews.length >= pageSize) {
+          i = globalIndex + 1;
+          break;
+        }
       }
-      
-      if (results.every(d => ((d as any).rows ?? []).length === 0)) break;
+
+      if (reviews.length < pageSize) {
+        currentOffset += rows.length;
+        i = currentOffset;
+      } else {
+        break;
+      }
     }
 
     const done = i >= totalTrain;
@@ -142,10 +177,10 @@ export async function GET(req: Request) {
       pageSize,
       venueId: venue.id,
       venueName: venue.name,
-      totalTrainRows: totalTrain,
+      totalTrainRows: all.length,
       source: "local-fallback",
       note:
-        "เชื่อม Hugging Face ไม่ได้ — ใช้รีวิวตัวอย่างในโปรเจกต์แทน โดยยังแบ่งตาม index mod 3 เหมือนโหมดปกติ",
+        "⚠️ เชื่อมต่อ Wongnai Dataset (Hugging Face) ไม่ได้ — กำลังแสดง 'ข้อความตัวอย่าง' ในโปรเจกต์แทน เพื่อการทดสอบออฟไลน์",
     });
   }
 }

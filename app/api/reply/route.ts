@@ -1,7 +1,25 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 import { analyzeWithTrainingData, buildReplyFromTrainingData } from "@/lib/trainingDataset";
 import { getVenueById, type Venue } from "@/lib/venues";
 import menuData from "@/data/menu.json";
+
+function getVenueSpecificExamples(venueId: string): string {
+  try {
+    const brandPath = path.join(process.cwd(), "data/brand.json");
+    if (!fs.existsSync(brandPath)) return "";
+    const data = JSON.parse(fs.readFileSync(brandPath, "utf-8"));
+    const examples = data.brands[venueId]?.examples || [];
+    if (examples.length === 0) return "";
+    
+    return "\nนี่คือตัวอย่างการตอบที่ถูกต้องของร้านนี้ (RAG):\n" + 
+      examples.slice(0, 5).map((ex: any) => `Review: ${ex.review}\nReply: ${ex.reply}`).join("\n\n");
+  } catch (error) {
+    console.error("Error loading RAG examples:", error);
+    return "";
+  }
+}
 
 type LlmResult = {
   sentiment?: "Positive" | "Neutral" | "Negative";
@@ -79,8 +97,9 @@ function buildVenueBlock(venue: Venue): string {
 }
 
 async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<LlmResult | null> {
+  const ragExamples = venue ? getVenueSpecificExamples(venue.id) : "";
   const venueBlock = venue
-    ? `${buildVenueBlock(venue)}\n\n`
+    ? `${buildVenueBlock(venue)}\n${ragExamples}\n`
     : `บทบาท: คุณคือ "แอดมินร้านอาหาร/คาเฟ่" ที่ต้องตอบลูกค้าเพื่อดูแลประสบการณ์\n`;
 
   const prompt = `${venueBlock}เป้าหมาย: ตอบลูกค้าอย่างมืออาชีพตามบริบทจริงของคอมเมนต์ทั้งก้อน
@@ -92,27 +111,20 @@ async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<Llm
 กติกา:
 - reply ต้องอยู่ในมุม "ร้านตอบลูกค้า" เท่านั้น
 - ถ้าลูกค้าชมหลายจุดและติบางจุด ให้ตอบแบบผสม: ขอบคุณ + ขอโทษเฉพาะจุดที่ติ + บอกว่าจะปรับปรุง
-- ถ้าติเรื่องราคา/ปริมาณ ให้ mention เรื่องราคา/ปริมาณให้ตรง
-- ถ้าติเรื่องรสชาติ ให้ mention เมนูนั้นตรงๆ เช่น ชามะนาวจืด, ไก่ชีสเลี่ยน
 - ใช้ภาษาไทยสุภาพ กระชับ 1-2 ประโยค ไม่ต้องยาว
 - ห้ามเขียนเหมือนสรุปรีวิว ห้ามใช้คำว่า "ลูกค้าบอกว่า..."
-- ห้ามตอบแบบทั่วไปที่ไม่อ้างอิงประเด็นจริงของคอมเมนต์
-- ห้ามออกความเห็นแทนลูกค้าแบบฟันธง เช่น "เมนูนี้อร่อยมากค่ะ" ให้ใช้สำนวน "ขอบคุณที่ชื่นชอบ..."
-- ห้ามใช้คำว่า "ท่าน" ให้ใช้ "คุณลูกค้า" หรือไม่ใช้สรรพนามแทน
-- ถ้า comment สั้นมาก เช่น "ไม่อร่อย" ห้ามเดาเมนู ให้ขอโทษแบบทั่วไปเรื่องรสชาติ
-
-ตัวอย่างสไตล์ที่ถูก:
-Input: "ขนมดีมาก แต่ชาเขียวหวานเกินไป"
-Output reply: "ขอบคุณมากนะคะที่ชอบขนมของร้านเรา และต้องขออภัยเรื่องชาเขียวหวานเกินไป ทางร้านจะปรับรสชาติให้ดีขึ้นค่ะ"
+- ห้ามใช้อีโมจิที่ดูเด็กเกินไป เน้นความเป็นมืออาชีพ
+- ห้ามใช้คำว่า "ท่าน" ให้ใช้ "คุณลูกค้า"
+- ถ้า comment สั้นมาก ห้ามเดาเมนู ให้ขอโทษแบบทั่วไป
 
 Comment:
 ${comment}`;
 
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    const url =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-    const res = await fetch(`${url}?key=${geminiKey}`, {
+  const fetchGemini = async () => {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) throw new Error("No Gemini key");
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    const res = await fetch(`${url}?key=${key}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -120,80 +132,64 @@ ${comment}`;
         generationConfig: { temperature: 0.2, topP: 0.9, maxOutputTokens: 300, responseMimeType: "application/json" },
       }),
     });
-    if (res.ok) {
-      const data = (await res.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      const parsed = safeJsonParse(text);
-      if (parsed?.reply) return parsed;
-    }
-  }
+    if (!res.ok) throw new Error("Gemini error");
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    return safeJsonParse(text);
+  };
 
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (openaiKey) {
+  const fetchOpenAI = async () => {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) throw new Error("No OpenAI key");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.2,
         response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "Return JSON only. Analyze full Thai comment context." },
-          { role: "user", content: prompt },
-        ],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
-    if (res.ok) {
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const text = data.choices?.[0]?.message?.content ?? "";
-      const parsed = safeJsonParse(text);
-      if (parsed?.reply) return parsed;
-    }
-  }
+    if (!res.ok) throw new Error("OpenAI error");
+    const data = await res.json();
+    return safeJsonParse(data.choices?.[0]?.message?.content ?? "");
+  };
 
-  const hfToken = process.env.HF_TOKEN;
-  if (hfToken) {
-    const hfModel = process.env.HF_MODEL || "Qwen/Qwen2.5-7B-Instruct";
+  const fetchHF = async () => {
+    const token = process.env.HF_TOKEN;
+    if (!token) throw new Error("No HF token");
+    const model = process.env.HF_MODEL || "Qwen/Qwen2.5-7B-Instruct";
     const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${hfToken}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        model: hfModel,
+        model,
         temperature: 0.2,
         response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "Return valid JSON only. Analyze full Thai comment context." },
-          { role: "user", content: prompt },
-        ],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
-    if (res.ok) {
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const text = data.choices?.[0]?.message?.content ?? "";
-      const parsed = safeJsonParse(text);
-      if (parsed?.reply) return parsed;
-      if (text.trim().length > 0) {
-        return { reply: text.replace(/```json|```/gi, "").trim() };
-      }
-    } else {
-      const errText = await res.text();
-      console.warn("[HF] API error:", errText);
-    }
-  }
+    if (!res.ok) throw new Error("HF error");
+    const data = await res.json();
+    return safeJsonParse(data.choices?.[0]?.message?.content ?? "");
+  };
 
-  return null;
+  // Run all available models in parallel and pick the FIRST successful one
+  const providers = [];
+  if (process.env.GEMINI_API_KEY) providers.push(fetchGemini());
+  if (process.env.OPENAI_API_KEY) providers.push(fetchOpenAI());
+  if (process.env.HF_TOKEN) providers.push(fetchHF());
+
+  if (providers.length === 0) return null;
+
+  try {
+    // Return the first one that resolves successfully
+    return await Promise.any(providers);
+  } catch (error) {
+    console.error("All AI providers failed or timed out");
+    return null;
+  }
 }
 
 export async function POST(req: Request) {
