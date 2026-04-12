@@ -211,11 +211,20 @@ ${comment}`;
 
 export async function POST(req: Request) {
   try {
-    const { comment, venueId } = await req.json();
+    const body = await req.json();
+    const comment = typeof body.comment === "string" ? body.comment.trim() : "";
+    const venueId = typeof body.venueId === "string" ? body.venueId : undefined;
 
-    if (!comment || typeof comment !== "string") {
+    if (!comment) {
       return NextResponse.json(
         { error: "Invalid comment" },
+        { status: 400 }
+      );
+    }
+
+    if (comment.length > 5000) {
+      return NextResponse.json(
+        { error: "Comment must be less than 5000 characters" },
         { status: 400 }
       );
     }
@@ -227,7 +236,10 @@ export async function POST(req: Request) {
     }
 
     const analysis = analyzeWithTrainingData(comment);
-    const llm = await generateReplyWithLlm(comment, venue);
+    const llm = await generateReplyWithLlm(comment, venue).catch((err) => {
+      console.warn("[LLM generation error]", err);
+      return null;
+    });
     const reply =
       llm?.reply?.trim() ||
       buildReplyFromTrainingData(comment, analysis.sentiment, analysis.aspect);

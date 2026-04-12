@@ -74,7 +74,10 @@ export default function Home() {
             source: data.source ?? "",
           });
         }
-      );
+      )
+      .catch((error) => {
+        console.error("Error fetching venues:", error);
+      });
   }, []);
 
   useEffect(() => {
@@ -99,6 +102,11 @@ export default function Home() {
           setReviewNote(typeof data.note === "string" ? data.note : "");
         }
       )
+      .catch((error) => {
+        console.error("Error fetching reviews:", error);
+        setReviews([]);
+        setReviewDone(false);
+      })
       .finally(() => setReviewsLoading(false));
   }, [selectedVenueId, reviewCursor]);
 
@@ -147,9 +155,9 @@ export default function Home() {
         comment: text,
         ...data,
         status: "pending",
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 11),
         venueId: data.venueId ?? selectedVenueId,
-        venueName: data.venueName ?? selectedVenue?.name ?? null,
+        venueName: (data.venueName as string | null | undefined) ?? selectedVenue?.name ?? null,
       };
 
       setResults(prev => [newResult, ...prev]);
