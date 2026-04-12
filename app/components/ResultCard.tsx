@@ -69,7 +69,15 @@ export default function ResultCard({
         <div className="flex items-center gap-4 py-2 border-y border-slate-50">
           <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
             <TrendingUp size={14} className="text-blue-500" />
-            <span>Confidence Score:</span>
+            <span>Confidence:</span>
+            <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden inline-block align-middle mx-1 border border-slate-50">
+              <div 
+                className={`h-full transition-all duration-1000 ${
+                  confidence > 0.8 ? "bg-green-500" : confidence > 0.5 ? "bg-amber-500" : "bg-red-500"
+                }`}
+                style={{ width: `${confidence * 100}%` }}
+              />
+            </div>
             <span className="text-slate-900 font-bold">{(confidence * 100).toFixed(0)}%</span>
           </div>
         </div>
@@ -83,12 +91,12 @@ export default function ResultCard({
             {reasoning && (
               <button 
                 onClick={() => setShowReasoning(!showReasoning)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                  showReasoning ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all shadow-sm ${
+                  showReasoning ? "bg-blue-100 text-blue-700 border border-blue-200" : "bg-white text-slate-500 border border-slate-200 hover:border-blue-300 hover:text-blue-600"
                 }`}
               >
-                <Lightbulb size={12} />
-                {showReasoning ? "ซ่อนวิธีคิด" : "ดูวิธีคิด AI"}
+                <TrendingUp size={12} />
+                {showReasoning ? "ซ่อนการวัดผล" : "ดูผลการวิเคราะห์ AI"}
               </button>
             )}
           </div>
@@ -100,14 +108,32 @@ export default function ResultCard({
           />
           
           {showReasoning && reasoning && (
-            <div className="mt-3 p-4 bg-amber-50 border border-amber-100 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-center gap-2 mb-2 text-amber-700">
-                <Lightbulb size={14} className="fill-amber-200" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">กระบวนการคิดของ AI</span>
+            <div className="mt-3 p-4 bg-slate-50 border border-slate-200 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Sentiment Analysis</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-2 h-2 rounded-full ${sentiment === "Positive" ? "bg-green-500" : sentiment === "Negative" ? "bg-red-500" : "bg-slate-400"}`} />
+                    <span className="text-xs font-bold text-slate-700">{sentiment}</span>
+                  </div>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">AI Confidence</span>
+                  <span className={`text-xs font-bold ${confidence > 0.8 ? "text-green-600" : "text-amber-600"}`}>
+                    {(confidence * 100).toFixed(1)}% Accuracy
+                  </span>
+                </div>
               </div>
-              <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                {reasoning}
-              </p>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Lightbulb size={14} className="text-amber-500 fill-amber-100" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">เหตุผลในการร่างคำตอบ</span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium pl-5 border-l-2 border-slate-200 ml-1.5">
+                  {reasoning}
+                </p>
+              </div>
             </div>
           )}
         </div>
