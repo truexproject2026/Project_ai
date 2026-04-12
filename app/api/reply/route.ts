@@ -49,6 +49,35 @@ function safeJsonParse(text: string): LlmResult | null {
     try {
       return JSON.parse(match[0]) as LlmResult;
     } catch {
+      // Try to heuristically extract a reply or fields from non-JSON LLM output
+      try {
+        // Look for explicit Reply: blocks or PLAIN_REPLY markers
+        const replyMatch = cleaned.match(/PLAIN_REPLY:\s*([\s\S]*)$/i) || cleaned.match(/Reply:\s*([\s\S]*)$/i);
+        if (replyMatch && replyMatch[1]) {
+          const extracted = replyMatch[1].trim();
+          // Stop at next JSON block or delimiter if present
+          const stop = extracted.search(/\n\s*\n/);
+          const replyText = stop > 0 ? extracted.slice(0, stop).trim() : extracted;
+          return { reply: replyText, reasoning: "Extracted reply from non-JSON LLM output", confidence: 0.6 };
+        }
+
+        // Fallback: find a quoted reply value
+        const jsonReplyMatch = cleaned.match(/"reply"\s*:\s*"([^"]{10,})"/i);
+        if (jsonReplyMatch && jsonReplyMatch[1]) {
+          return { reply: jsonReplyMatch[1].trim(), reasoning: "Extracted quoted reply from LLM text", confidence: 0.6 };
+        }
+
+        // As a last resort, return the last paragraph as a reply
+        const paragraphs = cleaned.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+        if (paragraphs.length) {
+          const last = paragraphs[paragraphs.length - 1];
+          if (last.length > 20) {
+            return { reply: last, reasoning: "Used last paragraph of LLM output as reply", confidence: 0.5 };
+          }
+        }
+      } catch (e) {
+        // ignore heuristic failures
+      }
       return null;
     }
   }
@@ -62,9 +91,9 @@ function buildVenueBlock(venue: Venue): string {
 }
 
 async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<LlmResult | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    return { error: "ไม่พบ GEMINI_API_KEY ในระบบ (ตรวจสอบไฟล์ .env)" };
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) {
+    return { error: "ไม่พบ GROQ_API_KEY ในระบบ (ตรวจสอบไฟล์ .env)" };
   }
 
   const ragExamples = venue ? getVenueSpecificExamples(venue.id) : "";
@@ -79,54 +108,60 @@ async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<Llm
 4. JSON เท่านั้น: ตอบในรูปแบบ {"sentiment": "Positive|Neutral|Negative", "aspect": "taste|price|service|atmosphere|speed|cleanliness|menu|packaging|general", "confidence": 0.0-1.0, "reply": "ข้อความตอบ", "reasoning": "วิธีคิด"}
 5. ห้ามมโนเมนูที่ลูกค้าไม่ได้พูดถึง`;
 
-  const userPrompt = `${venueBlock}\n${ragExamples}\n\nคอมเมนต์ลูกค้า: "${comment}"`;
+  const userPrompt = `${venueBlock}
+${ragExamples}
+
+คอมเมนต์ลูกค้า: "${comment}"`;
 
   try {
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-    const res = await fetch(`${url}?key=${key}`, {
+    const url = "https://api.groq.com/openai/v1/chat/completions";
+    
+    const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${groqKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: { 
-          temperature: 0.3, 
-          topP: 0.95, 
-          maxOutputTokens: 800, 
-          responseMimeType: "application/json" 
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-        ]
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: systemInstruction,
+          },
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+        temperature: 0.3,
+        top_p: 0.95,
+        max_tokens: 800,
       }),
     });
 
     if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(`Gemini API Error: ${res.status} - ${JSON.stringify(errData)}`);
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(`Groq API Error: ${res.status} - ${JSON.stringify(errData)}`);
     }
 
     const data = await res.json();
     
-    // Check if blocked by safety
-    const candidate = data.candidates?.[0];
-    if (candidate?.finishReason === "SAFETY") {
-      return {
-        error: "AI ปฏิเสธการตอบเนื่องจากตรวจพบคำศัพท์ที่สุ่มเสี่ยง (Safety Block)"
-      };
+    // Groq returns choices array (OpenAI format)
+    const text = data.choices?.[0]?.message?.content ?? "";
+    if (!text) {
+      throw new Error("Groq API returned empty content");
     }
 
-    const text = candidate?.content?.parts?.[0]?.text ?? "";
     const result = safeJsonParse(text);
-    if (!result) return { error: "AI ตอบกลับมาในรูปแบบที่ระบบไม่อ่านไม่ได้ (Invalid JSON)" };
+    if (!result) {
+      return { error: "AI ตอบกลับมาในรูปแบบที่ระบบไม่อ่านไม่ได้ (Invalid JSON from Groq)" };
+    }
     
     return result;
   } catch (error: any) {
-    console.error("LLM Fetch Error:", error);
-    return { error: `เกิดข้อผิดพลาดในการเชื่อมต่อ AI: ${error.message}` };
+    console.error("Groq LLM Error:", error);
+    return { error: `เกิดข้อผิดพลาดในการเชื่อมต่อ Groq API: ${error.message}` };
   }
 }
 
