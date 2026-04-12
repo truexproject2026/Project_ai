@@ -23,6 +23,7 @@ interface Result {
   comment: string;
   sentiment: string;
   reply: string;
+  reasoning?: string;
   confidence: number;
   timestamp: string;
   status: "pending" | "approved" | "rejected";
@@ -272,6 +273,7 @@ export default function Home() {
       const newResult: Result = {
         comment: text,
         ...data,
+        reasoning: data.reasoning,
         status: "pending",
         id: Date.now().toString() + Math.random().toString(36).slice(2, 11),
         venueId: data.venueId ?? selectedVenueId,
@@ -646,6 +648,7 @@ export default function Home() {
                                 comment={result.comment}
                                 sentiment={result.sentiment}
                                 reply={result.reply}
+                                reasoning={result.reasoning}
                                 confidence={result.confidence}
                                 timestamp={result.timestamp}
                                 onApprove={(reply) => handleApprove(idx, reply)}

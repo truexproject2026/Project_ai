@@ -26,6 +26,7 @@ type LlmResult = {
   aspect?: string;
   reply?: string;
   confidence?: number;
+  reasoning?: string;
 };
 
 function normalizeText(text: string): string {
@@ -102,34 +103,50 @@ async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<Llm
     ? `${buildVenueBlock(venue)}\n${ragExamples}\n`
     : `บทบาท: คุณคือ "แอดมินร้านอาหาร/คาเฟ่" ที่ต้องตอบลูกค้าเพื่อดูแลประสบการณ์\n`;
 
-  const prompt = `${venueBlock}เป้าหมาย: ตอบลูกค้าอย่างมืออาชีพตามบริบทจริงของคอมเมนต์ทั้งก้อน
-อ่านคอมเมนต์ทั้งข้อความ ห้ามสรุปจากคำเดี่ยว ห้ามเดาเมนูที่ไม่ได้ถูกพูดถึง
+  const prompt = `${venueBlock}
+  ---
+  หน้าที่ของคุณ: ในฐานะเจ้าของร้าน/แบรนด์ระดับมืออาชีพ จงวิเคราะห์และตอบกลับรีวิวลูกค้าด้วย "ความเข้าใจอย่างลึกซึ้ง (Empathy)"
+  
+  ขั้นตอนการวิเคราะห์ (Internal Logic):
+  1. แยกแยะประเด็น: ลูกค้าพูดถึงเรื่องอะไรบ้าง? (รสชาติ, บริการ, บรรยากาศ, ราคา, ความเร็ว)
+  2. วิเคราะห์อารมณ์: ลูกค้ากำลังรู้สึกอย่างไร? (ประทับใจ, ผิดหวัง, เฉยๆ, หรือตำหนิอย่างรุนแรง)
+  3. ตรวจสอบบริบท: มีการเปรียบเทียบหรือความคาดหวังอะไรที่ซ่อนอยู่ไหม?
+  
+  โครงสร้าง JSON ที่ต้องตอบ (ห้ามมีข้อความอื่นปนเด็ดขาด):
+  {
+    "sentiment": "Positive|Neutral|Negative",
+    "aspect": "taste|price|service|atmosphere|speed|cleanliness|menu|packaging|general",
+    "confidence": 0.0-1.0,
+    "reply": "ข้อความตอบลูกค้า",
+    "reasoning": "อธิบายสั้นๆ ว่าทำไมถึงตอบแบบนี้ วิเคราะห์อารมณ์ลูกค้าอย่างไร และเลือกใช้คำไหนเป็นพิเศษ (ภาษาไทย)"
+  }
 
-ตอบเป็น JSON เท่านั้น ในรูปแบบ:
-{"sentiment":"Positive|Neutral|Negative","aspect":"taste|price|service|atmosphere|speed|cleanliness|menu|packaging|general","confidence":0.0-1.0,"reply":"ข้อความตอบลูกค้า"}
+  กฎเหล็กในการร่างคำตอบ (Brand Consistency):
+  - "จริงใจและตรงประเด็น": ถ้าลูกค้าชม ต้องขอบคุณให้ดูอบอุ่น ถ้าลูกค้าติ ต้องขออภัยและแสดงความรับผิดชอบอย่างเป็นรูปธรรม
+  - "ภาษาสละสลวย": ใช้ภาษาไทยที่เป็นธรรมชาติเหมือนคนคุยกัน (Conversational Thai) ไม่ใช้ภาษาทางการจนเกินไป หรือภาษาหุ่นยนต์
+  - "Addressing Specifics": ห้ามตอบกว้างๆ (Generic) ถ้าลูกค้าชมกุ้งเผา ให้พูดถึงกุ้งเผา ถ้าลูกค้าติเรื่องที่จอดรถ ให้พูดถึงที่จอดรถ
+  - "ห้ามมโน": ห้ามเดาเมนูหรือข้อมูลที่ไม่มีในคอมเมนต์
+  - "ระดับความมั่นใจ": หากคอมเมนต์สั้นหรือกำกวม ให้ลดค่า confidence ลง
 
-กติกา:
-- reply ต้องอยู่ในมุม "ร้านตอบลูกค้า" เท่านั้น
-- ถ้าลูกค้าชมหลายจุดและติบางจุด ให้ตอบแบบผสม: ขอบคุณ + ขอโทษเฉพาะจุดที่ติ + บอกว่าจะปรับปรุง
-- ใช้ภาษาไทยสุภาพ กระชับ 1-2 ประโยค ไม่ต้องยาว
-- ห้ามเขียนเหมือนสรุปรีวิว ห้ามใช้คำว่า "ลูกค้าบอกว่า..."
-- ห้ามใช้อีโมจิที่ดูเด็กเกินไป เน้นความเป็นมืออาชีพ
-- ห้ามใช้คำว่า "ท่าน" ให้ใช้ "คุณลูกค้า"
-- ถ้า comment สั้นมาก ห้ามเดาเมนู ให้ขอโทษแบบทั่วไป
-
-Comment:
-${comment}`;
+  คอมเมนต์จากลูกค้า:
+  "${comment}"`;
 
   const fetchGemini = async () => {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("No Gemini key");
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+    // อัปเกรดเป็น Gemini 2.0 Flash
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
     const res = await fetch(`${url}?key=${key}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, topP: 0.9, maxOutputTokens: 300, responseMimeType: "application/json" },
+        generationConfig: { 
+          temperature: 0.25, 
+          topP: 0.95, 
+          maxOutputTokens: 500, 
+          responseMimeType: "application/json" 
+        },
       }),
     });
     if (!res.ok) throw new Error("Gemini error");
@@ -239,6 +256,7 @@ export async function POST(req: Request) {
       reply: normalizedReply,
       confidence,
       aspect,
+      reasoning: llm?.reasoning ?? "วิเคราะห์จากฐานข้อมูลตัวอย่างเดิม",
       matchedExamples: analysis.matchedExamples.map((item) => item.id),
       llmUsed: Boolean(llm?.reply),
       status: "pending",

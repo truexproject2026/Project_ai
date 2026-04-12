@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
-import { Check, X, MessageSquare, Clock, ShieldCheck, TrendingUp } from "lucide-react";
+import { Check, X, MessageSquare, Clock, ShieldCheck, TrendingUp, Lightbulb } from "lucide-react";
 
 interface ResultCardProps {
   comment: string;
   sentiment: string;
   reply: string;
+  reasoning?: string;
   confidence: number;
   timestamp: string;
   onApprove?: (reply: string) => void;
@@ -16,6 +17,7 @@ export default function ResultCard({
   comment,
   sentiment,
   reply,
+  reasoning,
   confidence,
   timestamp,
   onApprove,
@@ -23,6 +25,7 @@ export default function ResultCard({
 }: ResultCardProps) {
   const [isApproving, setIsApproving] = useState(false);
   const [editedReply, setEditedReply] = useState(reply);
+  const [showReasoning, setShowReasoning] = useState(false);
 
   const sentimentColors = {
     Positive: "bg-green-100 text-green-700 border-green-200",
@@ -72,16 +75,41 @@ export default function ResultCard({
         </div>
 
         <div>
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-            <ShieldCheck size={14} className="text-green-500" />
-            Draft Response
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <ShieldCheck size={14} className="text-green-500" />
+              Draft Response
+            </label>
+            {reasoning && (
+              <button 
+                onClick={() => setShowReasoning(!showReasoning)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                  showReasoning ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+                }`}
+              >
+                <Lightbulb size={12} />
+                {showReasoning ? "ซ่อนวิธีคิด" : "ดูวิธีคิด AI"}
+              </button>
+            )}
+          </div>
           <textarea
             value={editedReply}
             onChange={(e) => setEditedReply(e.target.value)}
             className="w-full p-4 border border-slate-200 bg-white rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all min-h-[120px] resize-y"
             placeholder="พิมพ์คำตอบที่ต้องการแก้ไข..."
           />
+          
+          {showReasoning && reasoning && (
+            <div className="mt-3 p-4 bg-amber-50 border border-amber-100 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-2 mb-2 text-amber-700">
+                <Lightbulb size={14} className="fill-amber-200" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">กระบวนการคิดของ AI</span>
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                {reasoning}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 justify-end pt-2">
