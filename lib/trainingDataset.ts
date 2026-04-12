@@ -1,4 +1,5 @@
 import trainingData from "@/data/training_reviews_v1.json";
+import menuData from "@/data/menu.json";
 
 export type SentimentLabel = "positive" | "neutral" | "negative";
 export type AspectLabel =
@@ -82,29 +83,38 @@ const complaintPhrases = [
 ];
 
 const contrastWords = ["แต่", "แต่ว่า", "however"];
-const menuMentionRules: Array<{ key: string; label: string }> = [
-  { key: "เครื่องดื่ม", label: "เครื่องดื่ม" },
-  { key: "กาแฟ", label: "กาแฟ" },
-  { key: "ชานม", label: "ชานม" },
-  { key: "โทส", label: "โทสต์" },
-  { key: "กล้วย", label: "กล้วย" },
-  { key: "เค้ก", label: "เค้ก" },
-  { key: "ชีสเค้ก", label: "ชีสเค้ก" },
-  { key: "อาหาร", label: "อาหาร" },
-];
+const menuMentionRules: Array<{ key: string; label: string }> = menuData.items;
 
 function normalizeText(text: string): string {
   return text.toLowerCase().trim();
 }
 
+/** 
+ * Uses Intl.Segmenter for proper Thai word segmentation if available, 
+ * otherwise fallbacks to n-grams or simple split.
+ */
+function tokenize(text: string): string[] {
+  const normalized = normalizeText(text);
+  if (typeof Intl !== "undefined" && (Intl as any).Segmenter) {
+    const segmenter = new (Intl as any).Segmenter("th", { granularity: "word" });
+    const segments = segmenter.segment(normalized);
+    return Array.from(segments)
+      .filter((s: any) => s.isWordLike)
+      .map((s: any) => s.segment);
+  }
+  // Fallback if Segmenter is unavailable (unlikely in modern Node)
+  return normalized.split(/\s+/).filter(Boolean);
+}
+
 function tokenOverlapScore(input: string, sample: string): number {
-  const inputTokens = normalizeText(input).split(/\s+/).filter(Boolean);
-  const sampleTokens = normalizeText(sample).split(/\s+/).filter(Boolean);
+  const inputTokens = tokenize(input);
+  const sampleTokens = tokenize(sample);
   if (!inputTokens.length || !sampleTokens.length) return 0;
 
   let score = 0;
+  const sampleSet = new Set(sampleTokens);
   for (const token of inputTokens) {
-    if (sampleTokens.includes(token)) score += 1;
+    if (sampleSet.has(token)) score += 1;
   }
   return score / Math.max(inputTokens.length, sampleTokens.length);
 }

@@ -59,30 +59,48 @@ export async function GET(req: Request) {
     const trainSplit = sizeData.size?.splits?.find((s) => s.split === "train");
     totalTrain = trainSplit?.num_rows ?? 0;
 
-    const chunk = 50;
+    const chunk = 100;
+    const concurrency = 4; // Fetch 400 rows in parallel per step
 
     while (reviews.length < pageSize && i < totalTrain && scanned < maxScan) {
-      const rowsRes = await fetch(ROWS_URL(i, chunk));
-      if (!rowsRes.ok) throw new Error("Failed to fetch remote dataset rows");
-      const rowsData = (await rowsRes.json()) as { rows?: DatasetRow[] };
-      const rows = rowsData.rows ?? [];
-      if (rows.length === 0) break;
-
-      hasMetadata ||= rows.some((row) => row?.row?.restaurant_id || row?.row?.restaurant_name);
-
-      for (let j = 0; j < rows.length; j += 1) {
-        if (reviews.length >= pageSize) break;
-        const globalIndex = i + j;
-        const row = rows[j]?.row;
-        if (!rowMatchesVenue(row, venue, globalIndex)) continue;
-        const comment = row?.review_body?.trim();
-        if (comment) {
-          reviews.push({ comment });
+      const remainingToScan = maxScan - scanned;
+      const currentBatchSize = Math.min(concurrency, Math.ceil(remainingToScan / chunk));
+      
+      const fetchPromises = [];
+      for (let b = 0; b < currentBatchSize; b++) {
+        const offset = i + (b * chunk);
+        if (offset < totalTrain) {
+          fetchPromises.push(fetch(ROWS_URL(offset, chunk)).then(res => res.ok ? res.json() : { rows: [] }));
         }
       }
 
-      scanned += rows.length;
-      i += rows.length;
+      const results = await Promise.all(fetchPromises);
+      
+      for (const data of results) {
+        const rows = (data as any).rows ?? [];
+        if (rows.length === 0) continue;
+
+        for (let j = 0; j < rows.length; j += 1) {
+          if (reviews.length >= pageSize) break;
+          const globalIndex = i + j;
+          const row = rows[j]?.row;
+          
+          hasMetadata ||= !!(row?.restaurant_id || row?.restaurant_name);
+
+          if (rowMatchesVenue(row, venue, globalIndex)) {
+            const comment = row?.review_body?.trim();
+            if (comment) {
+              reviews.push({ comment });
+            }
+          }
+        }
+        
+        scanned += rows.length;
+        i += rows.length;
+        if (reviews.length >= pageSize) break;
+      }
+      
+      if (results.every(d => ((d as any).rows ?? []).length === 0)) break;
     }
 
     const done = i >= totalTrain;

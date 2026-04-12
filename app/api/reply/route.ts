@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { analyzeWithTrainingData, buildReplyFromTrainingData } from "@/lib/trainingDataset";
 import { getVenueById, type Venue } from "@/lib/venues";
+import menuData from "@/data/menu.json";
 
 type LlmResult = {
   sentiment?: "Positive" | "Neutral" | "Negative";
@@ -15,21 +16,7 @@ function normalizeText(text: string): string {
 
 function extractMentionedMenuItems(comment: string): string[] {
   const text = normalizeText(comment);
-  const rules: Array<{ key: string; label: string }> = [
-    { key: "กาแฟ", label: "กาแฟ" },
-    { key: "ลาเต้", label: "ลาเต้" },
-    { key: "ชามะนาว", label: "ชามะนาว" },
-    { key: "ชาเขียว", label: "ชาเขียว" },
-    { key: "ชามะลิ", label: "ชามะลิ" },
-    { key: "สปาเกตตี้หอยเชลล์", label: "สปาเกตตี้หอยเชลล์" },
-    { key: "สปาเกตตี้", label: "สปาเกตตี้" },
-    { key: "ซุปเห็ด", label: "ซุปเห็ด" },
-    { key: "แพนเค้ก", label: "แพนเค้ก" },
-    { key: "โทสต์", label: "โทสต์" },
-    { key: "ขนม", label: "ขนม" },
-    { key: "อาหาร", label: "อาหาร" },
-    { key: "เครื่องดื่ม", label: "เครื่องดื่ม" },
-  ];
+  const rules = menuData.items;
 
   const found: string[] = [];
   for (const rule of rules) {
@@ -46,14 +33,14 @@ function enforceReplyStyle(comment: string, reply: string): string {
     .replace(/ลูกค้าท่าน/g, "คุณลูกค้า")
     .trim();
 
-  const mentioned = extractMentionedMenuItems(comment);
-  const hasMentionedMenu = mentioned.some((item) => normalizeText(cleaned).includes(item));
+  const mentionedInComment = extractMentionedMenuItems(comment);
+  const mentionedInReply = extractMentionedMenuItems(cleaned);
 
   // If model invents specific menu not in comment, fallback to safer response.
-  const knownMenus = ["ชามะนาว", "ชาเขียว", "ชามะลิ", "สปาเกตตี้หอยเชลล์", "สปาเกตตี้", "ซุปเห็ด", "แพนเค้ก", "โทสต์", "ลาเต้", "กาแฟ"];
-  const inventedSpecificMenu = knownMenus.some(
-    (menu) => normalizeText(cleaned).includes(menu) && !normalizeText(comment).includes(menu)
+  const inventedSpecificMenu = mentionedInReply.some(
+    (item) => !mentionedInComment.includes(item)
   );
+
   if (inventedSpecificMenu) {
     if (normalizeText(comment).includes("ไม่อร่อย")) {
       return "ต้องขออภัยคุณลูกค้าด้วยนะคะที่รสชาติยังไม่ถูกใจ ทางร้านจะนำคำแนะนำไปปรับปรุงทันทีค่ะ";
@@ -61,7 +48,7 @@ function enforceReplyStyle(comment: string, reply: string): string {
     return "ขอบคุณคุณลูกค้าสำหรับความคิดเห็นนะคะ ทางร้านรับฟังและจะนำไปปรับปรุงให้ดีขึ้นค่ะ";
   }
 
-  if (!hasMentionedMenu && normalizeText(comment).includes("ไม่อร่อย")) {
+  if (mentionedInComment.length === 0 && normalizeText(comment).includes("ไม่อร่อย")) {
     return "ต้องขออภัยคุณลูกค้าด้วยนะคะที่รสชาติยังไม่ถูกใจ ทางร้านจะนำคำแนะนำไปปรับปรุงทันทีค่ะ";
   }
 
