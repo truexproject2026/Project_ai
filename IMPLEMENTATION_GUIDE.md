@@ -20,22 +20,22 @@ Save to Database
 
 ```
 data/
-├── brand.json           # Brand personality & examples
-├── sample_reviews.json  # Sample dataset for testing
+├── brand-config.json     # Brand personality & examples
+├── sample_reviews.json   # Sample dataset for testing
 └── approved_replies.json # Saved approved replies
 
 app/
 ├── api/
-│   ├── reply/route.ts     # AI generate reply
-│   ├── reviews/route.ts   # Fetch reviews from Wongnai
-│   ├── sentiment/route.ts # Sentiment analysis
-│   └── approve/route.ts   # Save approved replies
+│   ├── auto-reply/route.ts        # AI generate reply
+│   ├── dataset-manager/route.ts   # Fetch reviews from Wongnai
+│   ├── sentiment-analysis/route.ts # Sentiment analysis
+│   └── staff-approval/route.ts    # Save approved replies
 ├── components/
-│   └── ResultCard.tsx   # Approval UI component
-└── page.tsx             # Main dashboard
+│   └── ResultCard.tsx    # Approval UI component
+└── page.tsx              # Main dashboard
 
 lib/
-└── vectorStore.ts       # Vector embedding & RAG
+└── rag-engine.ts         # Vector embedding & RAG
 ```
 
 ## 🚀 Setup & Run
@@ -57,7 +57,7 @@ npm run dev
 
 ### 1. **Customize Brand Personality**
 
-Edit `data/brand.json`:
+Edit `data/brand-config.json`:
 
 ```json
 {
@@ -78,7 +78,7 @@ Edit `data/brand.json`:
 
 ### 2. **Add More Training Examples**
 
-- Add more review-reply pairs in `brand.json` → `examples`
+- Add more review-reply pairs in `brand-config.json` → `examples`
 - The system uses vector embeddings (all-MiniLM-L6-v2) to find similar examples
 - More diverse examples = Better responses
 
@@ -88,7 +88,7 @@ Edit `data/brand.json`:
 
 ```typescript
 // Fetch from Wongnai via Hugging Face
-GET /api/reviews
+GET /api/dataset-manager
 ```
 
 ### Option 2: Custom Dataset
@@ -96,7 +96,7 @@ GET /api/reviews
 **From CSV/JSON:**
 ```typescript
 // Add to sample_reviews.json
-// Then import programmatically in /api/reviews
+// Then import programmatically in /api/dataset-manager
 ```
 
 **From Social Media:**
@@ -107,7 +107,7 @@ GET /api/reviews
 **From Kaggle:**
 - Search "Thai Sentiment" or "Restaurant Reviews"
 - Convert to format: `{ review: "", reply: "" }`
-- Add to `brand.json`
+- Add to `brand-config.json`
 
 ## 💾 Approval Workflow
 
@@ -140,11 +140,11 @@ GET /api/reviews
 
 ## 🔌 API Endpoints
 
-### POST `/api/reply`
+### POST `/api/auto-reply`
 Analyze comment and generate reply
 
 ```bash
-curl -X POST http://localhost:3000/api/reply \
+curl -X POST http://localhost:3000/api/auto-reply \
   -H "Content-Type: application/json" \
   -d '{"comment":"กาแฟอร่อยมากค่ะ"}'
 ```
@@ -160,14 +160,14 @@ Response:
 }
 ```
 
-### GET `/api/reviews`
+### GET `/api/dataset-manager`
 Fetch sample reviews from Wongnai
 
-### POST `/api/approve`
+### POST `/api/staff-approval`
 Save approved reply
 
 ```bash
-curl -X POST http://localhost:3000/api/approve \
+curl -X POST http://localhost:3000/api/staff-approval \
   -H "Content-Type: application/json" \
   -d '{
     "comment": "Original comment",
@@ -223,7 +223,7 @@ curl -X POST http://localhost:3000/api/approve \
 | Issue | Solution |
 |-------|----------|
 | AI always returns default reply | Check HF_TOKEN, check model response in console logs |
-| Replies don't match brand tone | Add more diverse examples to `brand.json` |
+| Replies don't match brand tone | Add more diverse examples to `brand-config.json` |
 | Slow responses | Model loading takes time on first run; caching improves subsequent runs |
 | Thai characters garbled | Ensure UTF-8 encoding in JSON files |
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const brandPath = path.join(process.cwd(), "data/brand.json");
+const brandPath = path.join(process.cwd(), "data/brand-config.json");
 
 function readBrand() {
   const content = fs.readFileSync(brandPath, "utf-8");

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { analyzeWithTrainingData, buildReplyFromTrainingData } from "@/lib/trainingDataset";
-import { getVenueById, type Venue } from "@/lib/venues";
+import { getVenueById, type Venue } from "@/lib/brand-manager";
 import menuData from "@/data/menu.json";
 
 function getVenueSpecificExamples(venueId: string): string {
   try {
-    const brandPath = path.join(process.cwd(), "data/brand.json");
+    const brandPath = path.join(process.cwd(), "data/brand-config.json");
     if (!fs.existsSync(brandPath)) return "";
     const data = JSON.parse(fs.readFileSync(brandPath, "utf-8"));
     const examples = data.brands[venueId]?.examples || [];
@@ -103,7 +103,8 @@ async function generateReplyWithLlm(comment: string, venue?: Venue): Promise<Llm
 หน้าที่: วิเคราะห์รีวิวลูกค้าและร่างคำตอบที่แสดงถึงความใส่ใจ (Empathy) 
 กฎเหล็ก:
 1. ตอบกลับด้วยความจริงใจ: หากชมให้ขอบคุณ หากติให้ขอโทษและระบุแนวทางแก้ไข
-2. โฟกัสที่ธุรกิจ: แม้ลูกค้าจะคุยเล่นหรือพูดนอกเรื่อง (เช่น ชมพนักงานว่าสวย, พูดเรื่องดินฟ้าอากาศ) ให้เพิกเฉยต่อส่วนที่วอกแวกนั้น แต่จงตอบในประเด็นหลักของร้าน (บรรยากาศ, กาแฟ, กิจกรรม)
+2. โฟกัสที่ธุรกิจ: แม้ลูกค้าจะคุยเล่นหรือพูดนอกเรื่อง (เช่น ชมพนักงานว่าสวย, พูดเรื่องดินฟ้าอากาศ) ให้เพิกเฉยต่อส่วนที่วอกแวกนั้น 
+   แต่จงตอบในประเด็นหลักของร้าน (บรรยากาศ, กาแฟ, กิจกรรม)
 3. ภาษาสละสลวย: ใช้ภาษาไทยที่เป็นธรรมชาติ (Conversational) ไม่เป็นหุ่นยนต์
 4. JSON เท่านั้น: ตอบในรูปแบบ {"sentiment": "Positive|Neutral|Negative", "aspect": "taste|price|service|atmosphere|speed|cleanliness|menu|packaging|general", "confidence": 0.0-1.0, "reply": "ข้อความตอบ", "reasoning": "วิธีคิด"}
 5. ห้ามมโนเมนูที่ลูกค้าไม่ได้พูดถึง`;
@@ -135,7 +136,7 @@ ${ragExamples}
           },
         ],
         temperature: 0.3,
-        top_p: 0.95,
+        top_p: 0.95, // ใช้ค่าต่ำเพื่อให้คำตอบนิ่งและอยู่ในร่องในรอย
         max_tokens: 800,
       }),
     });

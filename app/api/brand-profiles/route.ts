@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listVenues } from "@/lib/venues";
+import { listVenues } from "@/lib/brand-manager";
 
 const DATASET_SIZE =
   "https://datasets-server.huggingface.co/size?dataset=iamwarint%2Fwongnai-restaurant-review";

@@ -84,7 +84,7 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    fetch("/api/venues")
+    fetch("/api/brand-profiles")
       .then((r) => r.json())
       .then(
         (data: {
@@ -110,8 +110,8 @@ export default function Home() {
     if (!selectedVenueId && reviewSource === "huggingface") return;
     setReviewsLoading(true);
     const url = reviewSource === "custom" 
-      ? `/api/reviews?source=custom&cursor=${reviewCursor}&pageSize=${pageSize}`
-      : `/api/reviews?venueId=${selectedVenueId}&cursor=${reviewCursor}&pageSize=${pageSize}`;
+      ? `/api/dataset-manager?source=custom&cursor=${reviewCursor}&pageSize=${pageSize}`
+      : `/api/dataset-manager?venueId=${selectedVenueId}&cursor=${reviewCursor}&pageSize=${pageSize}`;
       
     fetch(url)
       .then((r) => r.json())
@@ -154,7 +154,7 @@ export default function Home() {
   const fetchTrainingData = async () => {
     if (!selectedVenueId) return;
     try {
-      const res = await fetch(`/api/training?venueId=${selectedVenueId}`);
+      const res = await fetch(`/api/knowledge-base?venueId=${selectedVenueId}`);
       const data = await res.json();
       setTrainingExamples(data);
     } catch (error) {
@@ -165,7 +165,7 @@ export default function Home() {
   const addTrainingExample = async () => {
     if (!newTrainingReview.trim() || !newTrainingReply.trim() || !selectedVenueId) return;
     try {
-      const res = await fetch("/api/training", {
+      const res = await fetch("/api/knowledge-base", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -187,7 +187,7 @@ export default function Home() {
   const deleteTrainingExample = async (index: number) => {
     if (!selectedVenueId) return;
     try {
-      const res = await fetch("/api/training", {
+      const res = await fetch("/api/knowledge-base", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ venueId: selectedVenueId, index }),
@@ -209,7 +209,7 @@ export default function Home() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/reviews/upload", {
+      const res = await fetch("/api/dataset-manager/upload", {
         method: "POST",
         body: formData,
       });
@@ -263,7 +263,7 @@ export default function Home() {
     setLoading(true);
     setProcessingComment(text);
     try {
-      const res = await fetch("/api/reply", {
+      const res = await fetch("/api/auto-reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ comment: text, venueId: selectedVenueId }),

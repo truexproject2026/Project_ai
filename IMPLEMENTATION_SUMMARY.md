@@ -16,7 +16,7 @@
 - Approve/Reject/Edit workflow
 - Sentiment color coding
 
-### 3. **Vector Store & RAG** (`/lib/vectorStore.ts`)
+### 3. **Vector Store & RAG** (`/lib/rag-engine.ts`)
 - Uses all-MiniLM-L6-v2 embeddings (384D)
 - Retrieves 3 most similar examples based on comment similarity
 - Provides context for consistent brand voice
@@ -210,3 +210,6 @@ Generate response matching brand tone
 - Read full guide: `IMPLEMENTATION_GUIDE.md`
 
 **Status**: ✅ **Ready to use!**
+use!**
+to use!**
+to use!**

@@ -1,4 +1,4 @@
-import venuesData from "@/data/venues.json";
+import venuesData from "@/data/brand-list.json";
 
 export type Venue = {
   id: string;

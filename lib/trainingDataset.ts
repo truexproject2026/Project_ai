@@ -1,4 +1,4 @@
-import trainingData from "@/data/training_reviews_v1.json";
+import trainingData from "@/data/rag-training-data.json";
 import menuData from "@/data/menu.json";
 
 export type SentimentLabel = "positive" | "neutral" | "negative";

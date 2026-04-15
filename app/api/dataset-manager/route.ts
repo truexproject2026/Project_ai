@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import sampleReviews from "@/data/sample_reviews.json";
-import { getVenueById, rowMatchesVenue, rowIndexMatchesVenue } from "@/lib/venues";
+import { getVenueById, rowMatchesVenue, rowIndexMatchesVenue } from "@/lib/brand-manager";
 
 type DatasetRow = {
   row?: {
